@@ -1,0 +1,2465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Breath Lantern</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..500&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+/* Breath Lantern — a deliberately single-theme, dark ambient tool.
+   The whole point is a soft colored light glowing on a dark ground, so
+   there is no light theme; every colour is still painted explicitly. */
+:root{
+  --ground:#090B10;
+  --ground-2:#0E121A;
+  --surface:#141A24;
+  --surface-2:#1C2632;
+  --hairline:#28323F;
+  --hairline-soft:#1F2733;
+  --ink:#EAEEF5;
+  --ink-dim:#8C97A9;
+  --ink-faint:#586173;
+  --accent:#84B2FF;
+
+  --font-display:'Fraunces','Iowan Old Style',Georgia,'Times New Roman',serif;
+  --font-ui:'Instrument Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  font-family:var(--font-ui);
+  color:var(--ink);
+  background:
+    radial-gradient(120% 90% at 50% 38%, var(--ground-2) 0%, var(--ground) 62%, #05070A 100%);
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+  min-height:100dvh;
+}
+body::after{ /* faint vignette so the light feels held by the dark */
+  content:"";
+  position:fixed; inset:0; pointer-events:none;
+  background:radial-gradient(130% 100% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%);
+}
+
+button{font-family:inherit;}
+:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:6px; }
+
+/* ---- wordmark ---------------------------------------------------------- */
+.mark{
+  position:fixed; top:20px; left:24px; z-index:6;
+  font-family:var(--font-display); font-weight:400; font-size:.98rem;
+  letter-spacing:.015em; color:var(--ink-dim);
+  transition:opacity .6s ease;
+}
+.mark .dot{ color:var(--accent); }
+
+/* ---- language flags (top-right, discreet) ------------------------------ */
+.langflags{
+  position:fixed; top:16px; right:18px; z-index:6; direction:ltr;
+  display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:5px;
+  max-width:min(280px, 50vw);
+  transition:opacity .6s ease;
+}
+.flag-btn{
+  appearance:none; background:none; border:none; cursor:pointer;
+  padding:2px; line-height:0; border-radius:50%;
+  filter:grayscale(55%) opacity(.6);
+  transition:filter .18s ease, box-shadow .18s ease, transform .15s ease;
+}
+.flag-btn svg{ display:block; width:20px; height:20px; border-radius:50%; }
+.flag-btn:hover{ filter:grayscale(0%) opacity(1); transform:translateY(-1px); }
+.flag-btn:focus-visible{ filter:grayscale(0%) opacity(1); }
+.flag-btn.active{
+  filter:grayscale(0%) opacity(1);
+  outline:2px solid var(--accent); outline-offset:2px;
+}
+
+/* ---- stage ----------------------------------------------------------- */
+.stage{
+  position:relative; z-index:2;
+  min-height:100dvh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:clamp(10px,3vh,32px);
+  padding:36px 20px calc(200px + env(safe-area-inset-bottom));
+  animation:rise .85s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes rise{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+
+.orb-wrap{
+  position:relative;
+  width:min(56vmin,40vh,380px);
+  aspect-ratio:1;
+  --c:#46C6D8;
+  --glow:rgba(70,198,216,.4);
+  --s:1;
+}
+.aura{
+  position:absolute; inset:0; border-radius:50%;
+  background:radial-gradient(circle, var(--glow) 0%, transparent 62%);
+  filter:blur(34px);
+  opacity:.9;
+  transform:scale(calc(var(--s) * 1.28));
+  transition:background .12s linear;
+}
+.orb{
+  position:absolute; inset:7%; border-radius:50%;
+  background:
+    radial-gradient(circle at 40% 36%, rgba(255,255,255,.26), rgba(255,255,255,0) 46%),
+    var(--c);
+  box-shadow:
+    0 0 100px 14px var(--glow),
+    inset 0 -34px 62px rgba(0,0,0,.30),
+    inset 0 22px 54px rgba(255,255,255,.10);
+  transform:scale(var(--s));
+  transition:background .12s linear, box-shadow .12s linear;
+}
+.ring{ position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+.ring .track{ fill:none; stroke:var(--hairline-soft); stroke-width:.7; }
+.ring .prog{
+  fill:none; stroke:var(--ink-dim); stroke-width:.7; stroke-linecap:round;
+  opacity:.85;
+  transform:rotate(-90deg); transform-origin:50% 50%;
+  transition:stroke-dashoffset .2s linear;
+}
+.ring .tip{ fill:var(--accent); opacity:0; transition:opacity .4s ease; filter:drop-shadow(0 0 3px var(--accent)); }
+.ring .tick{ stroke:var(--ink-faint); stroke-width:.55; opacity:.5; stroke-linecap:round; }
+
+/* ---- readout ------------------------------------------------------------ */
+.readout{
+  display:flex; flex-direction:column; align-items:center; gap:.35em;
+  text-align:center;
+  transition:opacity .6s ease;
+}
+.phase-word{
+  font-family:var(--font-display);
+  font-weight:300;
+  font-size:clamp(2.3rem,8.5vmin,3.7rem);
+  line-height:1;
+  letter-spacing:.012em;
+  color:var(--ink);
+  text-wrap:balance;
+}
+.phase-count{
+  font-family:var(--font-mono);
+  font-weight:400;
+  font-size:clamp(.95rem,3vmin,1.2rem);
+  letter-spacing:.06em;
+  color:var(--ink-dim);
+  font-variant-numeric:tabular-nums;
+  min-height:1.2em;
+}
+.subline{
+  font-size:.72rem; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-faint); min-height:1em;
+  transition:opacity .6s ease;
+}
+.hint{
+  margin:0; font-size:.85rem; color:var(--ink-faint);
+  letter-spacing:.01em;
+  transition:opacity .5s ease;
+}
+
+/* discreet quick-start row on the main screen */
+.quickstart{
+  display:flex; flex-wrap:wrap; justify-content:center; align-items:center;
+  gap:1px; margin-top:.55em; max-width:min(96vw, 540px);
+}
+.quickstart[hidden]{ display:none; }
+.qs-btn{
+  appearance:none; background:none; border:1px solid transparent; cursor:pointer;
+  color:var(--ink-dim); font-family:var(--font-ui);
+  font-size:.64rem; letter-spacing:.12em; text-transform:uppercase;
+  padding:6px 9px; border-radius:999px;
+  transition:color .18s ease, background .18s ease, border-color .18s ease;
+}
+.qs-btn:hover, .qs-btn:focus-visible{
+  color:var(--ink); background:rgba(255,255,255,.05); border-color:var(--hairline);
+}
+
+/* ---- dock (fixed controls) -------------------------------------------
+   direction:ltr on these three is deliberate: in RTL languages the flag
+   picker, the transport buttons and (especially) the elapsed/total counter
+   should stay in a fixed, predictable order rather than mirror — flipping
+   "elapsed / total" would swap which number means what. Only the actual
+   prose (paragraphs, labels, preset text) follows the page's RTL direction. */
+.meter{
+  position:fixed; left:0; right:0; bottom:calc(144px + env(safe-area-inset-bottom));
+  z-index:5; direction:ltr;
+  display:flex; justify-content:center; align-items:baseline; gap:.5em;
+  font-family:var(--font-mono); font-size:.82rem; letter-spacing:.08em;
+  color:var(--ink-dim); font-variant-numeric:tabular-nums;
+  transition:opacity .6s ease;
+}
+.meter .slash{ color:var(--ink-faint); }
+
+.dock{
+  position:fixed; left:0; right:0; bottom:calc(64px + env(safe-area-inset-bottom));
+  z-index:5; direction:ltr;
+  display:flex; align-items:center; justify-content:center; gap:20px;
+}
+.ghost{
+  appearance:none; border:1px solid var(--hairline);
+  background:rgba(20,26,36,.55); backdrop-filter:blur(8px);
+  color:var(--ink-dim);
+  font-size:.82rem; letter-spacing:.09em; text-transform:uppercase;
+  padding:10px 16px; border-radius:999px; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+  transition:color .25s ease, border-color .25s ease, opacity .5s ease, background .25s ease;
+}
+.ghost:hover{ color:var(--ink); border-color:var(--ink-faint); }
+.ghost.icon{ width:44px; height:44px; padding:0; }
+.ghost.icon svg{ width:18px; height:18px; }
+
+.play{
+  appearance:none; cursor:pointer;
+  width:68px; height:68px; border-radius:50%;
+  border:1px solid color-mix(in srgb, var(--play-c, var(--accent)) 38%, var(--hairline));
+  background:radial-gradient(circle at 50% 40%, var(--surface-2), var(--surface));
+  color:var(--play-c, var(--ink));
+  display:inline-flex; align-items:center; justify-content:center;
+  box-shadow:0 8px 30px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06),
+    0 0 22px -8px var(--play-glow, transparent);
+  transition:transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .3s ease, opacity .5s ease, border-color .3s ease;
+}
+.play:hover{ transform:translateY(-1px); border-color:var(--play-c, var(--accent)); box-shadow:0 10px 34px rgba(0,0,0,.45), 0 0 0 4px var(--play-glow-soft, rgba(132,178,255,.12)); }
+.play svg{ width:24px; height:24px; }
+.play.playing{ border-color:var(--hairline); }
+.dock.disabled .play{ opacity:.4; pointer-events:none; }
+
+/* immersive: recede the chrome while a session runs */
+body.immersive .mark,
+body.immersive .langflags,
+body.immersive .meter,
+body.immersive .dock .ghost{ opacity:0; pointer-events:none; }
+body.immersive .dock .play{ opacity:.32; }
+body.immersive .hint{ opacity:0; }
+
+/* ---- panel ---------------------------------------------------------- */
+.panel{
+  position:fixed; left:50%; z-index:7;
+  bottom:calc(148px + env(safe-area-inset-bottom));
+  width:min(430px, calc(100vw - 28px));
+  transform:translateX(-50%) translateY(calc(100% + 130px));
+  opacity:0; pointer-events:none;
+  background:var(--surface);
+  border:1px solid var(--hairline);
+  border-radius:20px;
+  padding:16px 16px 18px;
+  box-shadow:0 30px 80px rgba(0,0,0,.55);
+  max-height:70dvh; overflow-y:auto;
+  transition:transform .42s cubic-bezier(.2,.75,.2,1), opacity .32s ease;
+}
+.panel.open{ transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
+.panel-head{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:12px; margin-bottom:12px;
+}
+.panel-head h2{
+  margin:0; font-family:var(--font-display); font-weight:400;
+  font-size:1.22rem; letter-spacing:.01em; color:var(--ink);
+}
+.prog-sum{
+  margin:3px 0 0; font-size:.75rem; letter-spacing:.03em;
+  color:var(--ink-faint); font-variant-numeric:tabular-nums;
+}
+.panel-head .close{
+  appearance:none; background:none; border:none; cursor:pointer;
+  color:var(--ink-dim); font-size:.78rem; letter-spacing:.11em; text-transform:uppercase;
+  padding:4px 2px;
+}
+.panel-head .close:hover{ color:var(--ink); }
+
+.rows{ display:flex; flex-direction:column; gap:2px; }
+.row{
+  display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:14px;
+  padding:9px 0;
+  border-bottom:1px solid var(--hairline-soft);
+}
+.row:last-child{ border-bottom:none; }
+.row .name{ font-size:.92rem; color:var(--ink); letter-spacing:.005em; }
+.row .name small{ display:block; color:var(--ink-faint); font-size:.72rem; letter-spacing:.04em; margin-top:1px; }
+
+.swatch{
+  appearance:none; -webkit-appearance:none;
+  width:30px; height:30px; padding:0; border:none; border-radius:50%;
+  background:none; cursor:pointer;
+  box-shadow:0 0 0 1px var(--hairline), 0 0 14px -2px currentColor;
+}
+.swatch::-webkit-color-swatch-wrapper{ padding:0; }
+.swatch::-webkit-color-swatch{ border:none; border-radius:50%; }
+.swatch::-moz-color-swatch{ border:none; border-radius:50%; }
+
+.sec{
+  display:inline-flex; align-items:center; gap:6px;
+  color:var(--ink-faint); font-family:var(--font-mono); font-size:.8rem;
+}
+.sec input{
+  width:52px; text-align:center;
+  background:var(--surface-2); border:1px solid var(--hairline);
+  color:var(--ink); border-radius:9px; padding:7px 6px;
+  font-family:var(--font-mono); font-size:.92rem; font-weight:500;
+  font-variant-numeric:tabular-nums;
+}
+.sec input:hover{ border-color:var(--ink-faint); }
+
+.field{ margin-top:14px; display:flex; flex-direction:column; gap:9px; }
+.field > label{
+  font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim);
+  display:flex; align-items:baseline; justify-content:space-between;
+}
+.field > label output{
+  font-family:var(--font-mono); letter-spacing:.04em; color:var(--ink); text-transform:none;
+}
+.field .sec{ align-self:flex-start; }
+
+input[type=range]{
+  -webkit-appearance:none; appearance:none; width:100%; height:4px;
+  background:var(--hairline); border-radius:999px; accent-color:var(--accent);
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%;
+  background:var(--accent); cursor:pointer; border:3px solid var(--surface);
+  box-shadow:0 0 0 1px var(--hairline);
+}
+input[type=range]::-moz-range-thumb{
+  width:14px; height:14px; border-radius:50%; background:var(--accent); cursor:pointer;
+  border:3px solid var(--surface);
+}
+
+.toggles{ gap:12px; margin-top:14px; }
+.toggles label{
+  display:flex; align-items:center; justify-content:flex-start; gap:11px;
+  font-size:.85rem; font-weight:400; color:var(--ink); letter-spacing:.005em;
+  text-transform:none;
+}
+.toggles label span{ flex:1; }
+.toggles input[type=checkbox]{
+  width:16px; height:16px; accent-color:var(--accent); cursor:pointer;
+}
+
+.sound-opts{
+  margin-top:12px; padding:14px 14px 4px;
+  border:1px solid var(--hairline-soft); border-radius:14px;
+  background:rgba(0,0,0,.14);
+}
+.sound-opts[hidden]{ display:none; }
+.sound-row{ display:flex; gap:10px; align-items:center; }
+.sound-row select{
+  flex:1; min-width:0;
+  background:var(--surface-2); border:1px solid var(--hairline); color:var(--ink);
+  border-radius:9px; padding:8px 10px;
+  font-family:var(--font-ui); font-size:.9rem;
+}
+.sound-row select:hover{ border-color:var(--ink-faint); }
+.mini{
+  appearance:none; flex:none;
+  border:1px solid var(--hairline); background:var(--surface-2);
+  color:var(--ink-dim); border-radius:9px; padding:8px 13px;
+  font-size:.74rem; letter-spacing:.09em; text-transform:uppercase; cursor:pointer;
+  transition:color .2s ease, border-color .2s ease;
+}
+.mini:hover{ color:var(--ink); border-color:var(--ink-faint); }
+
+/* ---- how to breathe --------------------------------------------------- */
+.howto{
+  border:1px solid var(--hairline-soft); border-radius:12px;
+  background:rgba(0,0,0,.14); padding:12px 14px; margin-bottom:4px;
+}
+.howto h3{
+  margin:0 0 7px; font-family:var(--font-display); font-weight:400;
+  font-size:.98rem; letter-spacing:.01em; color:var(--ink);
+}
+.howto p{
+  margin:0 0 8px; font-size:.78rem; line-height:1.55; color:var(--ink-dim);
+  letter-spacing:.004em;
+}
+.howto p:last-child{ margin-bottom:0; }
+.howto b{ color:var(--ink); font-weight:600; }
+
+.section-label{
+  font-size:.72rem; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--ink-dim); margin:18px 0 8px;
+}
+
+/* ---- presets ------------------------------------------------------- */
+.presets-body{ display:flex; flex-direction:column; gap:6px; }
+.preset-chip{
+  background:var(--surface-2); border:1px solid var(--hairline); border-radius:10px;
+  overflow:hidden; transition:border-color .15s ease;
+}
+.preset-chip:hover{ border-color:var(--ink-faint); }
+.preset-chip.active{ border-color:var(--accent); }
+.pc-head{
+  width:100%; display:flex; align-items:center; gap:10px;
+  padding:8px 9px 8px 11px;
+}
+.pc-info{
+  flex:1; min-width:0; display:flex; align-items:center; gap:10px;
+  background:none; border:none; cursor:pointer;
+  text-align:left; font:inherit; color:var(--ink); padding:1px 0;
+}
+.pc-swatch{ flex:none; width:8px; align-self:stretch; min-height:30px; border-radius:5px; }
+.pc-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.pc-line1{ display:flex; align-items:baseline; gap:8px; }
+.pc-name{ font-size:.9rem; color:var(--ink); }
+.pc-meta{ font-size:.71rem; color:var(--ink-dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.pc-info .chev{
+  flex:none; color:var(--ink-dim); font-size:.62rem; transition:transform .2s ease;
+}
+.preset-chip.expanded .pc-info .chev{ transform:rotate(90deg); }
+.pc-desc{ font-size:.74rem; color:var(--ink-faint); letter-spacing:.01em; }
+.pc-start{
+  flex:none; appearance:none; cursor:pointer;
+  border:1px solid var(--accent); border-radius:999px;
+  background:rgba(132,178,255,.10); color:var(--ink);
+  font:inherit; font-size:.72rem; letter-spacing:.1em; text-transform:uppercase;
+  padding:7px 14px;
+  transition:background .15s ease;
+}
+.pc-start:hover{ background:rgba(132,178,255,.2); }
+.pc-body{ padding:0 12px 12px; display:none; }
+.preset-chip.expanded .pc-body{ display:block; }
+.pc-about{
+  margin:2px 0 10px; font-size:.78rem; line-height:1.5; color:var(--ink-dim);
+  letter-spacing:.005em;
+}
+.pc-struct{ display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+.pc-step{
+  display:grid; grid-template-columns:auto 1fr; gap:8px;
+  font-size:.73rem; line-height:1.45; color:var(--ink-faint);
+}
+.pc-step b{
+  color:var(--ink-dim); font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.pc-use{
+  appearance:none; padding:0; border:none; background:none; cursor:pointer;
+  color:var(--ink-dim); font:inherit; font-size:.74rem; letter-spacing:.02em;
+  text-decoration:underline; text-underline-offset:3px;
+  transition:color .15s ease;
+}
+.pc-use:hover{ color:var(--ink); }
+
+/* ---- program blocks (compact) ------------------------------------- */
+.blocks{ display:flex; flex-direction:column; gap:7px; }
+.block{
+  border:1px solid var(--hairline-soft); border-radius:12px;
+  background:rgba(0,0,0,.14); overflow:hidden;
+}
+.block.open{ border-color:var(--hairline); background:rgba(0,0,0,.22); }
+.block-head{ display:flex; align-items:center; gap:4px; padding:2px 4px; }
+.block-toggle{
+  flex:1; min-width:0; display:flex; align-items:center; gap:8px;
+  background:none; border:none; cursor:pointer; color:var(--ink);
+  font:inherit; text-align:left; padding:7px 5px;
+}
+.block-toggle .chev{
+  flex:none; color:var(--ink-dim); font-size:.62rem;
+  transition:transform .2s ease;
+}
+.block.open .block-toggle .chev{ transform:rotate(90deg); }
+.block-title{ flex:none; font-size:.86rem; color:var(--ink); }
+.block-sum{
+  flex:1; min-width:0; font-size:.74rem; color:var(--ink-faint);
+  letter-spacing:.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums;
+}
+.block.open .block-sum{ display:none; }
+.block-tools{ display:flex; gap:0; flex:none; }
+.mini-ic{
+  width:26px; height:26px; flex:none;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:none; border:1px solid transparent; border-radius:7px;
+  color:var(--ink-dim); cursor:pointer; font-size:.88rem; line-height:1;
+  transition:color .15s ease, border-color .15s ease;
+}
+.mini-ic:hover{ color:var(--ink); border-color:var(--hairline); }
+.mini-ic:disabled{ opacity:.22; cursor:default; }
+
+.block-body{ display:none; padding:4px 12px 12px; }
+.block.open .block-body{ display:block; }
+
+.pgrid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.pcell{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+.pcell > span{
+  font-size:.6rem; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--ink-dim); white-space:nowrap;
+}
+.pcell .swatch{ width:22px; height:22px; }
+.pcell input[type=number]{
+  width:100%; min-width:0; text-align:center;
+  background:var(--surface-2); border:1px solid var(--hairline); color:var(--ink);
+  border-radius:8px; padding:6px 2px;
+  font-family:var(--font-mono); font-size:.9rem; font-weight:500;
+  font-variant-numeric:tabular-nums;
+}
+.pcell input[type=number]:hover{ border-color:var(--ink-faint); }
+
+.drow{ display:flex; gap:12px; margin-top:13px; }
+.drow label{
+  flex:1; display:flex; align-items:center; gap:8px;
+  font-size:.8rem; color:var(--ink-dim); letter-spacing:.01em;
+}
+.drow label input[type=number]{
+  width:46px; margin-left:auto; text-align:center;
+  background:var(--surface-2); border:1px solid var(--hairline); color:var(--ink);
+  border-radius:8px; padding:6px 4px;
+  font-family:var(--font-mono); font-size:.9rem; font-weight:500;
+}
+.drow label i{ font-style:normal; color:var(--ink-faint); font-size:.72rem; }
+
+.add-block{
+  margin-top:10px; width:100%; padding:10px;
+  border:1px dashed var(--hairline); border-radius:11px;
+  background:none; color:var(--ink-dim);
+  font:inherit; font-size:.78rem; letter-spacing:.08em; text-transform:uppercase;
+  cursor:pointer; transition:color .2s ease, border-color .2s ease;
+}
+.add-block:hover{ color:var(--ink); border-color:var(--ink-faint); }
+.add-block:disabled{ opacity:.3; cursor:default; }
+
+.toast{
+  position:fixed; left:50%; transform:translateX(-50%) translateY(8px);
+  bottom:calc(150px + env(safe-area-inset-bottom));
+  z-index:9;
+  background:var(--surface-2); border:1px solid var(--hairline);
+  color:var(--ink); font-size:.82rem; letter-spacing:.01em;
+  padding:9px 15px; border-radius:999px;
+  opacity:0; pointer-events:none;
+  transition:opacity .3s ease, transform .3s ease;
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+@media (prefers-reduced-motion:reduce){
+  *{ animation-duration:.001s !important; transition-duration:.08s !important; }
+}
+
+/* very short viewports (landscape phones): keep the readout clear of the dock */
+@media (max-height:620px){
+  .stage{ gap:6px; padding:24px 20px calc(214px + env(safe-area-inset-bottom)); }
+  .orb-wrap{ width:min(42vmin,24vh,380px); }
+  .phase-word{ font-size:clamp(1.5rem,6vmin,2.2rem); }
+  .subline{ display:none; }
+  .hint{ display:none; }
+  .quickstart{ margin-top:.3em; }
+  .langflags{ top:10px; right:12px; }
+  .dock{ bottom:calc(80px + env(safe-area-inset-bottom)); }
+  .meter{ bottom:calc(158px + env(safe-area-inset-bottom)); }
+  .panel{ bottom:calc(130px + env(safe-area-inset-bottom)); max-height:70dvh; }
+}
+</style>
+</head>
+<body>
+
+<div class="mark">Breath <span class="dot">Lantern</span></div>
+<div class="langflags" id="langflags" role="group" aria-label="Language"></div>
+
+<main class="stage">
+  <div class="orb-wrap" id="orbWrap">
+    <svg class="ring" viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="track" cx="50" cy="50" r="47" pathLength="1"></circle>
+      <circle class="prog" id="prog" cx="50" cy="50" r="47" pathLength="1"
+              stroke-dasharray="1" stroke-dashoffset="1"></circle>
+      <g id="ticks"></g>
+      <circle class="tip" id="tip" r="1.9"></circle>
+    </svg>
+    <div class="aura" id="aura"></div>
+    <div class="orb" id="orb"></div>
+  </div>
+
+  <div class="readout" id="readout">
+    <div class="phase-word" id="phaseWord">Ready</div>
+    <div class="phase-count" id="phaseCount"></div>
+    <div class="subline" id="subline"></div>
+    <div class="quickstart" id="quickstart" hidden></div>
+    <p class="hint" id="hint">or press play for your own program</p>
+  </div>
+</main>
+
+<div class="meter" id="meter" aria-hidden="true">
+  <span id="elapsed">0:00</span><span class="slash">/</span><span id="total">5:00</span>
+</div>
+
+<div class="dock" id="dock">
+  <button class="ghost" id="adjust" aria-expanded="false" aria-controls="panel">Adjust</button>
+  <button class="play" id="play" aria-label="Start session"></button>
+  <button class="ghost icon" id="reset" aria-label="Reset session" title="Reset">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"></path><path d="M20 4v4h-4"></path></svg>
+  </button>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<section class="panel" id="panel" aria-label="Breathing program settings">
+  <div class="panel-head">
+    <div class="panel-title">
+      <h2 id="panelTitle">Program</h2>
+      <p class="prog-sum" id="progSum"></p>
+    </div>
+    <button class="close" id="closePanel">Done</button>
+  </div>
+
+  <div class="howto">
+    <h3 id="howtoTitle">How to breathe</h3>
+    <p id="howtoP1">This is the most natural breath there is — it's how babies breathe, before life teaches us to breathe from the chest instead.</p>
+    <p id="howtoP2">Inhale: your belly comes out. Exhale: your belly goes in. That's it — this simple motion sends oxygen down to the lowest, richest part of your lungs.</p>
+  </div>
+
+  <div class="section-label" id="sessionsLabel">Sessions</div>
+  <div class="presets-body" id="presetsBody"></div>
+
+  <div class="section-label" id="customizeLabel">Customise your own</div>
+  <div class="blocks" id="blocks"></div>
+  <button type="button" class="add-block" id="addBlock">+ Add block</button>
+
+  <div class="field">
+    <label for="soft"><span id="softLabel">Transition softness</span> <output id="softOut">55%</output></label>
+    <input type="range" id="soft" min="0" max="100" step="1">
+  </div>
+
+  <div class="field toggles">
+    <label><input type="checkbox" id="breathe"> <span id="breatheLabel">Lantern swells and settles with the breath</span></label>
+    <label><input type="checkbox" id="awake"> <span id="awakeLabel">Keep the screen awake while playing</span></label>
+    <label><input type="checkbox" id="sound"> <span id="soundLabel">Sound a gentle gong as each phase begins</span></label>
+  </div>
+
+  <div class="field sound-opts" id="soundOpts" hidden>
+    <label for="voice" id="voiceLabel">Gong voice</label>
+    <div class="sound-row">
+      <select id="voice" aria-label="Gong voice">
+        <option value="temple">Temple bell</option>
+        <option value="bowl">Singing bowl</option>
+        <option value="crystal">Crystal</option>
+        <option value="deep">Deep gong</option>
+        <option value="mallet">Soft mallet</option>
+        <option value="chime">Wind chime</option>
+      </select>
+      <button type="button" class="mini" id="preview">Hear</button>
+    </div>
+    <label for="vol"><span id="volumeLabel">Volume</span> <output id="volOut">30%</output></label>
+    <input type="range" id="vol" min="0" max="100" step="1">
+  </div>
+</section>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(s){ return document.querySelector(s); };
+
+  var TYPES  = ['inhale','holdFull','exhale','holdEmpty'];   // internal keys; display names are localised via phaseName(type)
+  var KEY = 'breath-lantern-v1';
+
+  var MAX_BLOCKS = 8;
+  var DEFAULT_PHASES = [
+    {sec:4, color:'#46c6d8'},
+    {sec:4, color:'#7c86e0'},
+    {sec:4, color:'#b487d6'},
+    {sec:4, color:'#3f5e9e'}
+  ];
+  function defaultBlock(){
+    return { phases: JSON.parse(JSON.stringify(DEFAULT_PHASES)), minutes:5, brk:1 };
+  }
+  var DEFAULTS = { blocks:[defaultBlock()], soft:55, breathe:true, awake:false,
+                   sound:false, voice:'temple', vol:30, preset:null };
+
+  /* ---------- built-in programs --------------------------------------
+     Each preset is a few real breathwork sequences with short rests,
+     tuned toward one outcome. p(sec, hex) = one phase. */
+  function p(sec, hex){ return { sec:sec, color:hex }; }
+  var PRESET_KEYS = ['calm','focus','energize','unwind','reset','coherence'];
+  var PRESETS = [
+    { key:'calm', soft:66,
+      blocks:[
+        { phases:[p(4,'#4fc8d6'),p(4,'#6f86dc'),p(4,'#8f7fd0'),p(4,'#47619e')], minutes:3,   brk:0.5 },
+        { phases:[p(4,'#49b6cd'),p(2,'#6a80d2'),p(6,'#7f74c6'),p(0,'#415e9c')], minutes:3,   brk:0.5 },
+        { phases:[p(4,'#3f93bf'),p(0,'#55639f'),p(8,'#4b4f92'),p(0,'#37407e')], minutes:3.5, brk:0   }
+      ] },
+    { key:'focus', soft:44,
+      blocks:[
+        { phases:[p(4,'#3ec3d2'),p(4,'#5a76d6'),p(4,'#3ec3d2'),p(4,'#4a5cae')], minutes:4, brk:0.5 },
+        { phases:[p(5,'#37b8cc'),p(5,'#5570cf'),p(5,'#37b8cc'),p(5,'#45579f')], minutes:5, brk:0   }
+      ] },
+    { key:'energize', soft:40,
+      blocks:[
+        { phases:[p(4,'#34d6c0'),p(1,'#6fe0a8'),p(3,'#f0c56e'),p(0,'#58cbb4')], minutes:2,   brk:0.5 },
+        { phases:[p(5,'#33d0cc'),p(1,'#77dc8f'),p(3,'#f4bc60'),p(0,'#52c6bf')], minutes:2,   brk:0.5 },
+        { phases:[p(4,'#3fc9d2'),p(0,'#66c0d8'),p(4,'#4aa8c0'),p(0,'#3f9fb8')], minutes:1.5, brk:0   }
+      ] },
+    { key:'unwind', soft:72,
+      blocks:[
+        { phases:[p(4,'#46769e'),p(4,'#47579a'),p(4,'#3f4f8e'),p(4,'#33406f')], minutes:3,   brk:0.5 },
+        { phases:[p(4,'#3f688f'),p(6,'#414f8e'),p(7,'#3a4680'),p(0,'#2e3a66')], minutes:3.5, brk:0.5 },
+        { phases:[p(4,'#395e84'),p(7,'#3b4a80'),p(8,'#333f72'),p(0,'#2a355e')], minutes:4,   brk:0   }
+      ] },
+    { key:'reset', soft:56,
+      blocks:[
+        { phases:[p(4,'#46c6d8'),p(0,'#7183d0'),p(6,'#8a7ac8'),p(0,'#445fa0')], minutes:2.5, brk:0.5 },
+        { phases:[p(4,'#45c1d3'),p(4,'#5f78ce'),p(4,'#45c1d3'),p(4,'#4a5ca8')], minutes:2,   brk:0   }
+      ] },
+    { key:'coherence', soft:60,
+      blocks:[
+        { phases:[p(5,'#43c3cf'),p(0,'#5b8fd0'),p(5,'#43c3cf'),p(0,'#5b8fd0')], minutes:5,   brk:0.5 },
+        { phases:[p(6,'#3fb9c9'),p(0,'#567fce'),p(6,'#3fb9c9'),p(0,'#567fce')], minutes:4.5, brk:0   }
+      ] }
+  ];
+  function presetByKey(k){ for(var i=0;i<PRESETS.length;i++) if(PRESETS[i].key===k) return PRESETS[i]; return null; }
+  function presetTotal(blocks){
+    var t = 0;
+    blocks.forEach(function(b,i){ t += b.minutes; if(i < blocks.length-1) t += b.brk; });
+    return t;
+  }
+
+  /* ---------- localisation ------------------------------------------------
+     Six languages. Every visible string lives here, keyed the same way in
+     each language object; T() returns the active one (falling back to
+     English for anything a language happens to be missing). Preset text
+     (name/desc/about/notes) lives under .presets[key] — the PRESETS array
+     above only holds the language-neutral structure (colours/timing). */
+  var LANGS = ['en','de','fr','es','pt','zh','hi','ar'];
+  var LANG_NATIVE = { en:'English', de:'Deutsch', fr:'Français', es:'Español', pt:'Português', zh:'中文', hi:'हिन्दी', ar:'العربية' };
+  var LANG_RTL = { ar:true };
+
+  function fillTpl(tpl, vals){
+    return tpl.replace(/\{(\w+)\}/g, function(m, k){ return (vals[k] != null) ? vals[k] : ''; });
+  }
+
+  var I18N = {
+    en: {
+      ready:"Ready", complete:"Complete", rest:"Rest", preview:"Preview",
+      getReady:"Get ready", emptyLungs:"Empty your lungs completely",
+      orPressPlay:"or press play for your own program",
+      programTitle:"Program", doneBtn:"Done", adjustBtn:"Adjust",
+      howToBreatheTitle:"How to breathe",
+      howToBreatheP1:"This is the most natural breath there is — it's how babies breathe, before life teaches us to breathe from the chest instead.",
+      howToBreatheP2:"Inhale: your belly comes out. Exhale: your belly goes in. That's it — this simple motion sends oxygen down to the lowest, richest part of your lungs.",
+      sessionsLabel:"Sessions", customizeLabel:"Customise your own", addBlockBtn:"+ Add block",
+      durationLabel:"Duration", restFieldLabel:"Rest", minUnit:"min",
+      softnessLabel:"Transition softness",
+      breatheToggleLabel:"Lantern swells and settles with the breath",
+      awakeToggleLabel:"Keep the screen awake while playing",
+      soundToggleLabel:"Sound a gentle gong as each phase begins",
+      gongVoiceLabel:"Gong voice", hearBtn:"Hear", volumeLabel:"Volume",
+      startBtn:"Start", customizeThisOneBtn:"Customise this one below",
+      customLabel:"Custom", languageLabel:"Language",
+      phaseNames:["Inhale","Hold","Exhale","Hold"],
+      voices:{ temple:"Temple bell", bowl:"Singing bowl", crystal:"Crystal", deep:"Deep gong", mallet:"Soft mallet", chime:"Wind chime" },
+      needsPhase:function(n){ return "Block "+n+" needs at least one breath above zero seconds."; },
+      addTimeFirst:"Add some time to your program first.",
+      loadedMsg:function(name){ return "Loaded "+name+" — customise it below"; },
+      blockTitle:function(n){ return "Block "+n; },
+      blockOf:function(n,total){ return "Block "+n+" of "+total; },
+      restNext:function(n){ return "Rest · Block "+n+" next"; },
+      doneSuffix:function(dur){ return dur+" complete"; },
+      minutesShort:function(m){ return m+" min"; },
+      hoursMinutes:function(h,mm){ return h+"h "+mm+"m"; },
+      partsWord:function(n){ return n + (n===1 ? " part" : " parts"); },
+      blocksCount:function(n){ return n + (n===1 ? " block" : " blocks"); },
+      startSessionAria:"Start session", pauseSessionAria:"Pause session",
+      resumeSessionAria:"Resume session", startAgainAria:"Start again",
+      resetSessionAria:"Reset session",
+      moveUpAria:"Move block up", moveDownAria:"Move block down", removeBlockAria:"Remove block",
+      colourAria:function(ph,n){ return ph+" colour, block "+n; },
+      secondsAria:function(ph,n){ return ph+" seconds, block "+n; },
+      startPresetAria:function(name){ return "Start "+name+" session"; },
+      presets:{
+        calm:{ name:"Calm", desc:"Ease down into a slow, settled rhythm",
+          about:"Breathing at about six breaths a minute shifts the autonomic balance toward the parasympathetic — the “rest and digest” branch. The lever that does most of the work is the exhale: when the out-breath is longer than the in-breath, vagal tone rises, the heart slows on each exhale, and overall arousal drops. This session opens with an even box pattern to steady you and regulate CO₂, then progressively stretches the exhale toward a 1:2 ratio so the calming response builds gradually instead of being forced. Ten minutes is roughly the time that shift needs to settle in and hold.",
+          notes:["Even box breathing — undemanding, steadies attention and balances CO₂ before the exhale work begins.",
+                 "The exhale now outlasts the inhale; this is where heart rate starts to fall on every out-breath.",
+                 "A full 1:2 ratio — the strongest parasympathetic pull — held long enough for the calm state to stick."] },
+        focus:{ name:"Focus", desc:"Steady box breathing to sharpen attention",
+          about:"Box breathing — equal inhale, hold, exhale, hold — is a staple in high-pressure professions because it does two things at once. The metronomic rhythm entrains heart-rate variability into a smooth, coherent pattern that goes with stable, unhurried prefrontal activity; and the two breath-holds gently raise your tolerance to CO₂, so the urge to over-breathe when stress spikes fades. Ten minutes is long enough for that rhythm to lock in without tipping you toward drowsiness.",
+          notes:["The standard 4-count box; four minutes to lock onto the cadence and let the rhythm carry itself.",
+                 "A longer 5-count box drops you to about three breaths a minute for deeper steadiness once you are warmed up."] },
+        energize:{ name:"Energize", desc:"Brisk, inhale-led breaths to lift your state",
+          about:"Alertness tracks a faster breath weighted toward the inhale, which nudges the sympathetic branch and lifts heart rate a little. A short hold at the top of the inhale improves oxygen uptake without the light-headedness that comes from sustained fast breathing. The session deliberately closes on an even pattern so you finish stimulated and clear rather than wired or buzzy — think of it as a gentle push, not a jolt.",
+          notes:["Quick and inhale-dominant with a short top hold — a light sympathetic lift.",
+                 "A fuller inhale for more chest expansion and a slightly bigger rise in arousal.",
+                 "An even close to level the nervous system off before you carry on with your day."] },
+        unwind:{ name:"Unwind", desc:"A 4-7-8 wind-down toward sleep",
+          about:"The 4-7-8 pattern, popularised by Dr Andrew Weil, pairs a long breath-hold with an exhale twice the length of the inhale. The hold builds a mild rise in CO₂, which is itself quieting, and the extended exhale drives the vagal brake that lowers heart rate and blood pressure — the physiological setup for falling asleep. This program eases in across two gentler blocks so that the seven-count hold feels natural, not effortful, by the time you reach the full pattern.",
+          notes:["Arrive and slow down — an even box with no long holds yet.",
+                 "A stepping stone that introduces the hold and the long exhale at moderate counts.",
+                 "The full 4-7-8, repeated for four minutes to carry you toward sleep."] },
+        reset:{ name:"Reset", desc:"A five-minute midday reset",
+          about:"A short dose of slow breathing with a lengthened exhale is enough to interrupt a stress spiral: even two to three minutes of roughly 1:1.5 breathing measurably lowers heart rate and self-reported tension. This is the minimum effective version — one block to down-regulate quickly, then one box block so you return to work clear-headed rather than sluggish.",
+          notes:["Extended exhale to pull arousal down fast.",
+                 "A short box to steady attention before you go back to what you were doing."] },
+        coherence:{ name:"Coherence", desc:"Resonance breathing near six breaths a minute",
+          about:"Around five to six breaths per minute is the “resonance frequency” of the cardiovascular system, where the rhythms of heart rate, breathing and blood-pressure waves line up and reinforce each other, producing unusually large heart-rate variability. Practising at this rate is associated in research with improved HRV, lower anxiety and steadier emotional regulation over time. Equal in-and-out breaths with no holds keep you sitting exactly on that resonance rather than pushing past it.",
+          notes:["Six breaths a minute — the classic resonance rate.",
+                 "Five breaths a minute; a touch slower for those who find the longer breath comfortable."] }
+      }
+    },
+
+    de: {
+      ready:"Bereit", complete:"Fertig", rest:"Pause", preview:"Vorschau",
+      getReady:"Bereit machen", emptyLungs:"Atme die Lunge ganz leer",
+      orPressPlay:"oder starte dein eigenes Programm",
+      programTitle:"Programm", doneBtn:"Fertig", adjustBtn:"Anpassen",
+      howToBreatheTitle:"So atmest du richtig",
+      howToBreatheP1:"Das ist die natürlichste Art zu atmen — so atmen Babys, bevor uns das Leben beibringt, stattdessen aus dem Brustkorb zu atmen.",
+      howToBreatheP2:"Einatmen: dein Bauch wölbt sich nach vorne. Ausatmen: dein Bauch zieht sich zurück. Das ist alles — diese einfache Bewegung bringt Sauerstoff bis in die untersten, am besten durchbluteten Bereiche deiner Lunge.",
+      sessionsLabel:"Sitzungen", customizeLabel:"Eigenes Programm gestalten", addBlockBtn:"+ Block hinzufügen",
+      durationLabel:"Dauer", restFieldLabel:"Pause", minUnit:"Min.",
+      softnessLabel:"Übergangsweichheit",
+      breatheToggleLabel:"Die Laterne schwillt mit dem Atem an und ab",
+      awakeToggleLabel:"Bildschirm während der Wiedergabe wach halten",
+      soundToggleLabel:"Bei jeder neuen Phase sanft einen Gong erklingen lassen",
+      gongVoiceLabel:"Gong-Klang", hearBtn:"Anhören", volumeLabel:"Lautstärke",
+      startBtn:"Start", customizeThisOneBtn:"Unten anpassen",
+      customLabel:"Eigenes", languageLabel:"Sprache",
+      phaseNames:["Einatmen","Halten","Ausatmen","Halten"],
+      voices:{ temple:"Tempelglocke", bowl:"Klangschale", crystal:"Kristall", deep:"Tiefer Gong", mallet:"Weicher Schlägel", chime:"Windspiel" },
+      needsPhase:function(n){ return "Block "+n+" braucht mindestens einen Atemzug über null Sekunden."; },
+      addTimeFirst:"Füge deinem Programm zuerst etwas Zeit hinzu.",
+      loadedMsg:function(name){ return name+" geladen — unten anpassen"; },
+      blockTitle:function(n){ return "Block "+n; },
+      blockOf:function(n,total){ return "Block "+n+" von "+total; },
+      restNext:function(n){ return "Pause · Block "+n+" folgt"; },
+      doneSuffix:function(dur){ return dur+" geschafft"; },
+      minutesShort:function(m){ return m+" Min."; },
+      hoursMinutes:function(h,mm){ return h+" Std. "+mm+" Min."; },
+      partsWord:function(n){ return n + (n===1 ? " Teil" : " Teile"); },
+      blocksCount:function(n){ return n + (n===1 ? " Block" : " Blöcke"); },
+      startSessionAria:"Sitzung starten", pauseSessionAria:"Sitzung pausieren",
+      resumeSessionAria:"Sitzung fortsetzen", startAgainAria:"Neu starten",
+      resetSessionAria:"Sitzung zurücksetzen",
+      moveUpAria:"Block nach oben verschieben", moveDownAria:"Block nach unten verschieben", removeBlockAria:"Block entfernen",
+      colourAria:function(ph,n){ return ph+"-Farbe, Block "+n; },
+      secondsAria:function(ph,n){ return ph+"-Dauer in Sekunden, Block "+n; },
+      startPresetAria:function(name){ return name+"-Sitzung starten"; },
+      presets:{
+        calm:{ name:"Ruhig", desc:"Gleite hinüber in einen langsamen, ruhigen Rhythmus",
+          about:"Etwa sechs Atemzüge pro Minute verschieben das autonome Gleichgewicht in Richtung Parasympathikus — dem „Ruhe- und Verdauungsnerv“. Die Ausatmung leistet dabei die meiste Arbeit: Ist sie länger als die Einatmung, steigt der Vagustonus, das Herz verlangsamt sich mit jedem Ausatmen, und die allgemeine Anspannung sinkt. Diese Sitzung beginnt mit einer gleichmäßigen Box-Atmung, die dich beruhigt und den CO₂-Spiegel reguliert, und dehnt die Ausatmung dann schrittweise auf ein Verhältnis von 1:2 aus, damit sich die beruhigende Wirkung allmählich aufbaut statt erzwungen zu werden. Zehn Minuten sind etwa die Zeit, die dieser Wechsel braucht, um sich zu setzen.",
+          notes:["Gleichmäßige Box-Atmung — unaufwendig, sammelt die Aufmerksamkeit und gleicht den CO₂-Spiegel aus, bevor die Ausatemarbeit beginnt.",
+                 "Die Ausatmung dauert nun länger als die Einatmung; hier beginnt die Herzfrequenz mit jedem Ausatmen zu sinken.",
+                 "Ein vollständiges Verhältnis von 1:2 — der stärkste parasympathische Zug — lange genug gehalten, damit der ruhige Zustand bleibt."] },
+        focus:{ name:"Fokus", desc:"Gleichmäßige Box-Atmung, die die Aufmerksamkeit schärft",
+          about:"Box-Atmung — gleich lange Einatmung, Halten, Ausatmung, Halten — wird in Berufen mit hohem Druck oft eingesetzt, weil sie zweierlei zugleich bewirkt. Der metronomische Rhythmus bringt die Herzfrequenzvariabilität in ein gleichmäßiges, kohärentes Muster, das mit ruhiger, stabiler präfrontaler Aktivität einhergeht; und die beiden Atempausen erhöhen sanft deine CO₂-Toleranz, sodass der Drang, bei Stress zu überatmen, nachlässt. Zehn Minuten reichen aus, damit sich dieser Rhythmus festigt, ohne dich müde zu machen.",
+          notes:["Die klassische Box mit vier Zählzeiten; vier Minuten, um den Takt zu finden und den Rhythmus tragen zu lassen.",
+                 "Eine längere Box mit fünf Zählzeiten senkt dich auf etwa drei Atemzüge pro Minute für noch mehr Ruhe, sobald du eingestimmt bist."] },
+        energize:{ name:"Energie", desc:"Zügige, einatmungsbetonte Atemzüge, die dich beleben",
+          about:"Wachheit folgt einer schnelleren, auf die Einatmung ausgerichteten Atmung, die den Sympathikus leicht anregt und die Herzfrequenz etwas anhebt. Ein kurzes Halten am Ende der Einatmung verbessert die Sauerstoffaufnahme, ohne die Benommenheit, die anhaltend schnelles Atmen mit sich bringt. Die Sitzung endet bewusst mit einem gleichmäßigen Muster, damit du angeregt und klar endest — nicht überdreht. Ein sanfter Schub, kein Ruck.",
+          notes:["Zügig und einatmungsbetont mit kurzem Halten oben — ein leichter sympathischer Impuls.",
+                 "Eine vollere Einatmung für mehr Brustausdehnung und einen etwas stärkeren Anstieg der Wachheit.",
+                 "Ein gleichmäßiger Abschluss, der das Nervensystem ausgleicht, bevor du weitermachst."] },
+        unwind:{ name:"Abschalten", desc:"Ein 4-7-8-Ausklang in Richtung Schlaf",
+          about:"Das von Dr. Andrew Weil bekannt gemachte 4-7-8-Muster verbindet ein langes Anhalten des Atems mit einer Ausatmung, die doppelt so lang ist wie die Einatmung. Das Anhalten lässt den CO₂-Spiegel leicht ansteigen, was selbst beruhigend wirkt, und die verlängerte Ausatmung aktiviert die vagale Bremse, die Herzfrequenz und Blutdruck senkt — die körperliche Voraussetzung fürs Einschlafen. Dieses Programm führt über zwei sanftere Blöcke heran, sodass sich das Halten über sieben Zählzeiten natürlich anfühlt, wenn du das volle Muster erreichst.",
+          notes:["Ankommen und verlangsamen — eine gleichmäßige Box ohne lange Atempausen.",
+                 "Eine Zwischenstufe, die das Halten und die lange Ausatmung mit moderaten Zählzeiten einführt.",
+                 "Das vollständige 4-7-8, vier Minuten lang wiederholt, um dich dem Schlaf näherzubringen."] },
+        reset:{ name:"Neustart", desc:"Ein fünfminütiger Reset für zwischendurch",
+          about:"Schon eine kurze Portion langsamer Atmung mit verlängerter Ausatmung reicht, um eine Stressspirale zu unterbrechen: Zwei bis drei Minuten Atmung im Verhältnis von etwa 1:1,5 senken nachweislich Herzfrequenz und empfundene Anspannung. Dies ist die minimal wirksame Version — ein Block zum schnellen Herunterfahren, dann ein Box-Block, damit du klar statt träge weitermachst.",
+          notes:["Verlängerte Ausatmung, um die Anspannung schnell zu senken.",
+                 "Eine kurze Box, um die Aufmerksamkeit zu sammeln, bevor es weitergeht."] },
+        coherence:{ name:"Kohärenz", desc:"Resonanzatmung bei etwa sechs Atemzügen pro Minute",
+          about:"Etwa fünf bis sechs Atemzüge pro Minute sind die „Resonanzfrequenz“ des Herz-Kreislauf-Systems, bei der sich die Rhythmen von Herzfrequenz, Atmung und Blutdruckwellen aufeinander einstellen und verstärken — das Ergebnis ist eine ungewöhnlich hohe Herzfrequenzvariabilität. Training bei dieser Frequenz wird in Studien mit besserer Herzfrequenzvariabilität, geringerer Angst und stabilerer emotionaler Regulation in Verbindung gebracht. Gleich lange Ein- und Ausatmung ohne Halten halten dich genau auf dieser Resonanz, statt darüber hinauszugehen.",
+          notes:["Sechs Atemzüge pro Minute — die klassische Resonanzfrequenz.",
+                 "Fünf Atemzüge pro Minute; etwas langsamer für alle, die den längeren Atemzug angenehmer finden."] }
+      }
+    },
+
+    fr: {
+      ready:"Prêt", complete:"Terminé", rest:"Pause", preview:"Aperçu",
+      getReady:"Prépare-toi", emptyLungs:"Vide complètement tes poumons",
+      orPressPlay:"ou lance ton propre programme",
+      programTitle:"Programme", doneBtn:"Terminé", adjustBtn:"Ajuster",
+      howToBreatheTitle:"Comment respirer",
+      howToBreatheP1:"C'est la façon de respirer la plus naturelle qui soit — celle des bébés, avant que la vie ne nous apprenne à respirer par la poitrine.",
+      howToBreatheP2:"Inspire : ton ventre se gonfle. Expire : ton ventre se creuse. C'est tout — ce simple mouvement envoie l'oxygène jusqu'à la partie la plus basse et la plus riche de tes poumons.",
+      sessionsLabel:"Séances", customizeLabel:"Personnalise le tien", addBlockBtn:"+ Ajouter un bloc",
+      durationLabel:"Durée", restFieldLabel:"Pause", minUnit:"min",
+      softnessLabel:"Douceur des transitions",
+      breatheToggleLabel:"La lanterne gonfle et se détend avec le souffle",
+      awakeToggleLabel:"Empêcher l'écran de se verrouiller pendant la lecture",
+      soundToggleLabel:"Faire sonner un gong doux au début de chaque phase",
+      gongVoiceLabel:"Son du gong", hearBtn:"Écouter", volumeLabel:"Volume",
+      startBtn:"Démarrer", customizeThisOneBtn:"Personnalise-le ci-dessous",
+      customLabel:"Personnalisé", languageLabel:"Langue",
+      phaseNames:["Inspire","Retiens","Expire","Retiens"],
+      voices:{ temple:"Cloche de temple", bowl:"Bol chantant", crystal:"Cristal", deep:"Gong grave", mallet:"Maillet doux", chime:"Carillon éolien" },
+      needsPhase:function(n){ return "Le bloc "+n+" a besoin d'au moins une respiration de plus de zéro seconde."; },
+      addTimeFirst:"Ajoute d'abord un peu de temps à ton programme.",
+      loadedMsg:function(name){ return name+" chargé — personnalise-le ci-dessous"; },
+      blockTitle:function(n){ return "Bloc "+n; },
+      blockOf:function(n,total){ return "Bloc "+n+" sur "+total; },
+      restNext:function(n){ return "Pause · Bloc "+n+" suivant"; },
+      doneSuffix:function(dur){ return dur+" terminé"; },
+      minutesShort:function(m){ return m+" min"; },
+      hoursMinutes:function(h,mm){ return h+" h "+mm+" min"; },
+      partsWord:function(n){ return n + (n===1 ? " partie" : " parties"); },
+      blocksCount:function(n){ return n + (n===1 ? " bloc" : " blocs"); },
+      startSessionAria:"Démarrer la séance", pauseSessionAria:"Mettre en pause",
+      resumeSessionAria:"Reprendre la séance", startAgainAria:"Recommencer",
+      resetSessionAria:"Réinitialiser la séance",
+      moveUpAria:"Déplacer le bloc vers le haut", moveDownAria:"Déplacer le bloc vers le bas", removeBlockAria:"Supprimer le bloc",
+      colourAria:function(ph,n){ return "Couleur "+ph+", bloc "+n; },
+      secondsAria:function(ph,n){ return "Secondes de "+ph+", bloc "+n; },
+      startPresetAria:function(name){ return "Démarrer la séance "+name; },
+      presets:{
+        calm:{ name:"Calme", desc:"Ralentis vers un rythme lent et posé",
+          about:"Respirer à environ six respirations par minute déplace l'équilibre du système nerveux autonome vers le parasympathique — la branche du « repos et digestion ». C'est l'expiration qui fait l'essentiel du travail : lorsqu'elle dure plus longtemps que l'inspiration, le tonus vagal augmente, le cœur ralentit à chaque expiration, et l'activation générale diminue. Cette séance commence par une respiration carrée régulière pour te stabiliser et réguler le CO₂, puis allonge progressivement l'expiration vers un ratio de 1:2 afin que l'effet apaisant s'installe graduellement plutôt que d'être forcé. Dix minutes correspondent à peu près au temps nécessaire pour que ce changement s'installe durablement.",
+          notes:["Respiration carrée régulière — simple, elle stabilise l'attention et équilibre le CO₂ avant le travail sur l'expiration.",
+                 "L'expiration dépasse désormais l'inspiration ; c'est là que la fréquence cardiaque commence à baisser à chaque expiration.",
+                 "Un ratio complet de 1:2 — la traction parasympathique la plus forte — maintenu assez longtemps pour ancrer l'état de calme."] },
+        focus:{ name:"Concentration", desc:"Respiration carrée régulière pour aiguiser l'attention",
+          about:"La respiration carrée — inspiration, rétention, expiration, rétention de durée égale — est un classique dans les métiers à forte pression, car elle agit sur deux plans à la fois. Le rythme métronomique entraîne la variabilité de la fréquence cardiaque vers un motif fluide et cohérent, associé à une activité préfrontale stable et posée ; et les deux rétentions augmentent en douceur ta tolérance au CO₂, ce qui atténue l'envie de suraccélérer la respiration en cas de pic de stress. Dix minutes suffisent pour ancrer ce rythme sans basculer vers la somnolence.",
+          notes:["La respiration carrée classique à 4 temps ; quatre minutes pour trouver la cadence et laisser le rythme s'installer.",
+                 "Une respiration carrée à 5 temps te fait descendre à environ trois respirations par minute pour plus de stabilité une fois échauffé."] },
+        energize:{ name:"Énergie", desc:"Respirations vives, portées par l'inspiration, pour te dynamiser",
+          about:"La vigilance suit une respiration plus rapide, orientée vers l'inspiration, qui stimule légèrement le système sympathique et augmente un peu la fréquence cardiaque. Une courte rétention en haut de l'inspiration améliore l'oxygénation sans la sensation de vertige propre à une respiration rapide prolongée. La séance se termine volontairement sur un rythme régulier pour finir stimulé et clair, sans être survolté — une impulsion douce, pas une secousse.",
+          notes:["Rapide et dominée par l'inspiration, avec une courte rétention en haut — une légère impulsion sympathique.",
+                 "Une inspiration plus ample pour une plus grande expansion thoracique et une hausse un peu plus marquée de la vigilance.",
+                 "Une fin régulière pour stabiliser le système nerveux avant de reprendre ta journée."] },
+        unwind:{ name:"Détente", desc:"Une descente en 4-7-8 vers le sommeil",
+          about:"Le motif 4-7-8, popularisé par le Dr Andrew Weil, associe une longue rétention à une expiration deux fois plus longue que l'inspiration. La rétention entraîne une légère hausse du CO₂, elle-même apaisante, et l'expiration prolongée active le frein vagal qui abaisse la fréquence cardiaque et la tension artérielle — les conditions physiologiques de l'endormissement. Ce programme s'installe progressivement sur deux blocs plus doux afin que la rétention de sept temps paraisse naturelle, sans effort, une fois le motif complet atteint.",
+          notes:["Arriver et ralentir — une respiration carrée régulière, sans rétention longue pour l'instant.",
+                 "Une étape intermédiaire qui introduit la rétention et l'expiration longue à un rythme modéré.",
+                 "Le 4-7-8 complet, répété pendant quatre minutes pour t'amener vers le sommeil."] },
+        reset:{ name:"Reset", desc:"Une pause de cinq minutes en pleine journée",
+          about:"Une courte dose de respiration lente à l'expiration allongée suffit à interrompre une spirale de stress : même deux à trois minutes de respiration à un ratio d'environ 1:1,5 abaissent mesurablement la fréquence cardiaque et la tension ressentie. Voici la version minimale efficace — un bloc pour redescendre rapidement, puis un bloc de respiration carrée pour reprendre le travail l'esprit clair plutôt qu'engourdi.",
+          notes:["Expiration allongée pour faire redescendre rapidement l'activation.",
+                 "Une courte respiration carrée pour stabiliser l'attention avant de reprendre ce que tu faisais."] },
+        coherence:{ name:"Cohérence", desc:"Respiration de résonance autour de six respirations par minute",
+          about:"Environ cinq à six respirations par minute correspondent à la « fréquence de résonance » du système cardiovasculaire, où les rythmes de la fréquence cardiaque, de la respiration et des ondes de pression artérielle s'alignent et se renforcent mutuellement, produisant une variabilité de la fréquence cardiaque inhabituellement élevée. S'entraîner à ce rythme est associé, dans la recherche, à une meilleure variabilité cardiaque, une anxiété réduite et une régulation émotionnelle plus stable dans la durée. Des respirations égales, sans rétention, te maintiennent exactement sur cette résonance plutôt que de la dépasser.",
+          notes:["Six respirations par minute — la fréquence de résonance classique.",
+                 "Cinq respirations par minute ; un peu plus lent, pour celles et ceux qui trouvent la respiration longue plus confortable."] }
+      }
+    },
+
+    es: {
+      ready:"Listo", complete:"Completado", rest:"Descanso", preview:"Vista previa",
+      getReady:"Prepárate", emptyLungs:"Vacía completamente tus pulmones",
+      orPressPlay:"o pulsa reproducir para tu propio programa",
+      programTitle:"Programa", doneBtn:"Listo", adjustBtn:"Ajustar",
+      howToBreatheTitle:"Cómo respirar",
+      howToBreatheP1:"Esta es la forma más natural de respirar — así respiran los bebés, antes de que la vida nos enseñe a respirar desde el pecho.",
+      howToBreatheP2:"Inhala: tu vientre sale hacia afuera. Exhala: tu vientre entra hacia adentro. Eso es todo — este simple movimiento envía oxígeno hasta la parte más baja y rica de tus pulmones.",
+      sessionsLabel:"Sesiones", customizeLabel:"Personaliza el tuyo", addBlockBtn:"+ Añadir bloque",
+      durationLabel:"Duración", restFieldLabel:"Descanso", minUnit:"min",
+      softnessLabel:"Suavidad de la transición",
+      breatheToggleLabel:"El farol se hincha y se calma con la respiración",
+      awakeToggleLabel:"Mantener la pantalla activa durante la reproducción",
+      soundToggleLabel:"Sonar un gong suave al comenzar cada fase",
+      gongVoiceLabel:"Sonido del gong", hearBtn:"Escuchar", volumeLabel:"Volumen",
+      startBtn:"Iniciar", customizeThisOneBtn:"Personalízalo abajo",
+      customLabel:"Personalizado", languageLabel:"Idioma",
+      phaseNames:["Inhala","Retén","Exhala","Retén"],
+      voices:{ temple:"Campana de templo", bowl:"Cuenco tibetano", crystal:"Cristal", deep:"Gong grave", mallet:"Mazo suave", chime:"Campanilla de viento" },
+      needsPhase:function(n){ return "El bloque "+n+" necesita al menos una respiración de más de cero segundos."; },
+      addTimeFirst:"Añade primero algo de tiempo a tu programa.",
+      loadedMsg:function(name){ return name+" cargado — personalízalo abajo"; },
+      blockTitle:function(n){ return "Bloque "+n; },
+      blockOf:function(n,total){ return "Bloque "+n+" de "+total; },
+      restNext:function(n){ return "Descanso · Bloque "+n+" siguiente"; },
+      doneSuffix:function(dur){ return dur+" completado"; },
+      minutesShort:function(m){ return m+" min"; },
+      hoursMinutes:function(h,mm){ return h+" h "+mm+" min"; },
+      partsWord:function(n){ return n + (n===1 ? " parte" : " partes"); },
+      blocksCount:function(n){ return n + (n===1 ? " bloque" : " bloques"); },
+      startSessionAria:"Iniciar sesión", pauseSessionAria:"Pausar sesión",
+      resumeSessionAria:"Reanudar sesión", startAgainAria:"Empezar de nuevo",
+      resetSessionAria:"Reiniciar sesión",
+      moveUpAria:"Mover bloque hacia arriba", moveDownAria:"Mover bloque hacia abajo", removeBlockAria:"Eliminar bloque",
+      colourAria:function(ph,n){ return "Color de "+ph+", bloque "+n; },
+      secondsAria:function(ph,n){ return "Segundos de "+ph+", bloque "+n; },
+      startPresetAria:function(name){ return "Iniciar sesión de "+name; },
+      presets:{
+        calm:{ name:"Calma", desc:"Desciende hacia un ritmo lento y sereno",
+          about:"Respirar a unas seis respiraciones por minuto desplaza el equilibrio autónomo hacia el parasimpático, la rama de «descanso y digestión». La palanca principal es la exhalación: cuando dura más que la inhalación, el tono vagal aumenta, el corazón se ralentiza en cada exhalación y la activación general disminuye. Esta sesión comienza con una respiración cuadrada uniforme para estabilizarte y regular el CO₂, y luego alarga progresivamente la exhalación hacia una proporción de 1:2 para que el efecto calmante se construya poco a poco, sin forzarlo. Diez minutos es aproximadamente el tiempo que ese cambio necesita para asentarse.",
+          notes:["Respiración cuadrada uniforme: sencilla, centra la atención y equilibra el CO₂ antes de trabajar la exhalación.",
+                 "La exhalación ya dura más que la inhalación; aquí es donde la frecuencia cardíaca empieza a bajar con cada exhalación.",
+                 "Una proporción completa de 1:2 —el impulso parasimpático más fuerte— mantenida el tiempo suficiente para que el estado de calma se afiance."] },
+        focus:{ name:"Enfoque", desc:"Respiración cuadrada uniforme para agudizar la atención",
+          about:"La respiración cuadrada —inhalación, retención, exhalación y retención de igual duración— es habitual en profesiones de alta presión porque logra dos cosas a la vez. El ritmo metronómico encauza la variabilidad de la frecuencia cardíaca hacia un patrón suave y coherente, asociado a una actividad prefrontal estable y sin prisas; y las dos retenciones elevan suavemente tu tolerancia al CO₂, por lo que las ganas de hiperventilar cuando el estrés se dispara disminuyen. Diez minutos bastan para afianzar ese ritmo sin llevarte a la somnolencia.",
+          notes:["La caja clásica de 4 tiempos; cuatro minutos para encontrar la cadencia y dejar que el ritmo se sostenga solo.",
+                 "Una caja más larga de 5 tiempos te lleva a unas tres respiraciones por minuto, para mayor estabilidad una vez ya estás en calor."] },
+        energize:{ name:"Energía", desc:"Respiraciones ágiles, guiadas por la inhalación, para elevar tu estado",
+          about:"La sensación de alerta acompaña a una respiración más rápida y volcada en la inhalación, que activa levemente el sistema simpático y eleva un poco la frecuencia cardíaca. Una breve retención en lo alto de la inhalación mejora la captación de oxígeno sin el aturdimiento propio de una respiración rápida sostenida. La sesión termina deliberadamente con un patrón uniforme para que acabes estimulado y despejado, no acelerado. Piensa en ello como un impulso suave, no un sobresalto.",
+          notes:["Rápida y dominada por la inhalación, con una breve retención arriba: un ligero impulso simpático.",
+                 "Una inhalación más completa para mayor expansión torácica y un aumento algo mayor de la activación.",
+                 "Un cierre uniforme que equilibra el sistema nervioso antes de continuar con tu día."] },
+        unwind:{ name:"Desconexión", desc:"Un descenso 4-7-8 hacia el sueño",
+          about:"El patrón 4-7-8, popularizado por el Dr. Andrew Weil, combina una retención larga con una exhalación que dura el doble que la inhalación. La retención genera un leve aumento del CO₂, que en sí mismo calma, y la exhalación prolongada activa el freno vagal que reduce la frecuencia cardíaca y la presión arterial: la base fisiológica para conciliar el sueño. Este programa se introduce a través de dos bloques más suaves para que la retención de siete tiempos resulte natural, sin esfuerzo, cuando llegues al patrón completo.",
+          notes:["Llegar y bajar el ritmo: una respiración cuadrada uniforme, todavía sin retenciones largas.",
+                 "Un paso intermedio que introduce la retención y la exhalación larga con tiempos moderados.",
+                 "El 4-7-8 completo, repetido durante cuatro minutos para acercarte al sueño."] },
+        reset:{ name:"Reinicio", desc:"Un reinicio de cinco minutos a mitad del día",
+          about:"Una breve dosis de respiración lenta con la exhalación alargada basta para interrumpir una espiral de estrés: incluso dos o tres minutos de respiración con una proporción de aproximadamente 1:1,5 reducen de forma medible la frecuencia cardíaca y la tensión percibida. Esta es la versión mínima eficaz: un bloque para bajar el ritmo rápidamente y otro de respiración cuadrada para que vuelvas al trabajo con la mente clara, no aletargada.",
+          notes:["Exhalación alargada para bajar la activación con rapidez.",
+                 "Una breve respiración cuadrada para centrar la atención antes de retomar lo que estabas haciendo."] },
+        coherence:{ name:"Coherencia", desc:"Respiración de resonancia cerca de seis respiraciones por minuto",
+          about:"Entre cinco y seis respiraciones por minuto es la «frecuencia de resonancia» del sistema cardiovascular, el punto en el que los ritmos de la frecuencia cardíaca, la respiración y las ondas de presión arterial se alinean y se refuerzan entre sí, produciendo una variabilidad de la frecuencia cardíaca inusualmente alta. Practicar a este ritmo se asocia, según la investigación, con una mejor variabilidad cardíaca, menor ansiedad y una regulación emocional más estable con el tiempo. Respiraciones iguales de entrada y salida, sin retenciones, te mantienen justo en esa resonancia en lugar de sobrepasarla.",
+          notes:["Seis respiraciones por minuto: la frecuencia de resonancia clásica.",
+                 "Cinco respiraciones por minuto; un poco más lenta, para quienes encuentran más cómoda la respiración larga."] }
+      }
+    },
+
+    pt: {
+      ready:"Pronto", complete:"Concluído", rest:"Descanso", preview:"Pré-visualização",
+      getReady:"Prepare-se", emptyLungs:"Esvazie completamente os pulmões",
+      orPressPlay:"ou toque em reproduzir para o seu próprio programa",
+      programTitle:"Programa", doneBtn:"Concluído", adjustBtn:"Ajustar",
+      howToBreatheTitle:"Como respirar",
+      howToBreatheP1:"Esta é a forma mais natural de respirar — é assim que os bebês respiram, antes de a vida nos ensinar a respirar pelo peito.",
+      howToBreatheP2:"Inspire: sua barriga se expande para fora. Expire: sua barriga volta para dentro. Só isso — esse movimento simples leva oxigênio até a parte mais baixa e mais rica dos seus pulmões.",
+      sessionsLabel:"Sessões", customizeLabel:"Personalize o seu", addBlockBtn:"+ Adicionar bloco",
+      durationLabel:"Duração", restFieldLabel:"Descanso", minUnit:"min",
+      softnessLabel:"Suavidade da transição",
+      breatheToggleLabel:"A lanterna incha e relaxa com a respiração",
+      awakeToggleLabel:"Manter a tela ativa durante a reprodução",
+      soundToggleLabel:"Tocar um gongo suave no início de cada fase",
+      gongVoiceLabel:"Som do gongo", hearBtn:"Ouvir", volumeLabel:"Volume",
+      startBtn:"Iniciar", customizeThisOneBtn:"Personalize abaixo",
+      customLabel:"Personalizado", languageLabel:"Idioma",
+      phaseNames:["Inspire","Segure","Expire","Segure"],
+      voices:{ temple:"Sino de templo", bowl:"Tigela tibetana", crystal:"Cristal", deep:"Gongo grave", mallet:"Baqueta suave", chime:"Sino de vento" },
+      needsPhase:function(n){ return "O bloco "+n+" precisa de pelo menos uma respiração acima de zero segundos."; },
+      addTimeFirst:"Adicione primeiro algum tempo ao seu programa.",
+      loadedMsg:function(name){ return name+" carregado — personalize abaixo"; },
+      blockTitle:function(n){ return "Bloco "+n; },
+      blockOf:function(n,total){ return "Bloco "+n+" de "+total; },
+      restNext:function(n){ return "Descanso · Bloco "+n+" a seguir"; },
+      doneSuffix:function(dur){ return dur+" concluído"; },
+      minutesShort:function(m){ return m+" min"; },
+      hoursMinutes:function(h,mm){ return h+" h "+mm+" min"; },
+      partsWord:function(n){ return n + (n===1 ? " parte" : " partes"); },
+      blocksCount:function(n){ return n + (n===1 ? " bloco" : " blocos"); },
+      startSessionAria:"Iniciar sessão", pauseSessionAria:"Pausar sessão",
+      resumeSessionAria:"Retomar sessão", startAgainAria:"Começar de novo",
+      resetSessionAria:"Reiniciar sessão",
+      moveUpAria:"Mover bloco para cima", moveDownAria:"Mover bloco para baixo", removeBlockAria:"Remover bloco",
+      colourAria:function(ph,n){ return "Cor de "+ph+", bloco "+n; },
+      secondsAria:function(ph,n){ return "Segundos de "+ph+", bloco "+n; },
+      startPresetAria:function(name){ return "Iniciar sessão de "+name; },
+      presets:{
+        calm:{ name:"Calma", desc:"Desça para um ritmo lento e tranquilo",
+          about:"Respirar a cerca de seis respirações por minuto desloca o equilíbrio autônomo em direção ao parassimpático — o ramo de «descanso e digestão». A expiração é o que faz a maior parte do trabalho: quando dura mais que a inspiração, o tônus vagal aumenta, o coração desacelera a cada expiração e a ativação geral diminui. Esta sessão começa com uma respiração quadrada uniforme para te estabilizar e regular o CO₂, e depois alonga gradualmente a expiração até uma proporção de 1:2, para que o efeito calmante se construa aos poucos, sem ser forçado. Dez minutos é aproximadamente o tempo que essa mudança leva para se firmar.",
+          notes:["Respiração quadrada uniforme — simples, estabiliza a atenção e equilibra o CO₂ antes do trabalho com a expiração.",
+                 "A expiração já dura mais que a inspiração; é aqui que a frequência cardíaca começa a cair a cada expiração.",
+                 "Uma proporção completa de 1:2 — o impulso parassimpático mais forte — mantida por tempo suficiente para fixar o estado de calma."] },
+        focus:{ name:"Foco", desc:"Respiração quadrada uniforme para aguçar a atenção",
+          about:"A respiração quadrada — inspiração, retenção, expiração e retenção de igual duração — é comum em profissões de alta pressão porque faz duas coisas ao mesmo tempo. O ritmo metronômico conduz a variabilidade da frequência cardíaca a um padrão suave e coerente, associado a uma atividade pré-frontal estável e tranquila; e as duas retenções aumentam suavemente sua tolerância ao CO₂, reduzindo a vontade de hiperventilar quando o estresse dispara. Dez minutos bastam para firmar esse ritmo sem levar à sonolência.",
+          notes:["A caixa clássica de 4 tempos; quatro minutos para encontrar a cadência e deixar o ritmo se sustentar sozinho.",
+                 "Uma caixa mais longa de 5 tempos reduz para cerca de três respirações por minuto, trazendo mais estabilidade depois de aquecido."] },
+        energize:{ name:"Energia", desc:"Respirações ágeis, guiadas pela inspiração, para elevar seu estado",
+          about:"O estado de alerta acompanha uma respiração mais rápida e voltada para a inspiração, que estimula levemente o sistema simpático e eleva um pouco a frequência cardíaca. Uma breve retenção no topo da inspiração melhora a captação de oxigênio sem a tontura própria da respiração rápida prolongada. A sessão termina deliberadamente em um padrão uniforme, para que você fique estimulado e alerta, sem ficar acelerado — um empurrão suave, não um susto.",
+          notes:["Rápida e dominada pela inspiração, com uma breve retenção no topo — um leve impulso simpático.",
+                 "Uma inspiração mais completa para maior expansão do peito e um aumento um pouco maior da ativação.",
+                 "Um fechamento uniforme que equilibra o sistema nervoso antes de você seguir com o seu dia."] },
+        unwind:{ name:"Relaxar", desc:"Uma descida em 4-7-8 rumo ao sono",
+          about:"O padrão 4-7-8, popularizado pelo Dr. Andrew Weil, combina uma retenção longa com uma expiração duas vezes mais longa que a inspiração. A retenção causa um leve aumento do CO₂, que por si só é calmante, e a expiração prolongada aciona o freio vagal que reduz a frequência cardíaca e a pressão arterial — a base fisiológica para adormecer. Este programa se introduz por meio de dois blocos mais suaves, para que a retenção de sete tempos pareça natural, sem esforço, quando você chegar ao padrão completo.",
+          notes:["Chegar e desacelerar — uma respiração quadrada uniforme, ainda sem retenções longas.",
+                 "Uma etapa intermediária que introduz a retenção e a expiração longa em tempos moderados.",
+                 "O 4-7-8 completo, repetido por quatro minutos para te levar rumo ao sono."] },
+        reset:{ name:"Reinício", desc:"Um reinício de cinco minutos no meio do dia",
+          about:"Uma breve dose de respiração lenta com a expiração alongada já basta para interromper uma espiral de estresse: mesmo dois a três minutos de respiração numa proporção de cerca de 1:1,5 reduzem de forma mensurável a frequência cardíaca e a tensão percebida. Esta é a versão mínima eficaz — um bloco para desacelerar rapidamente, depois um bloco de respiração quadrada para você voltar ao trabalho com a mente clara, e não sonolenta.",
+          notes:["Expiração alongada para baixar a ativação rapidamente.",
+                 "Uma breve respiração quadrada para firmar a atenção antes de retomar o que você estava fazendo."] },
+        coherence:{ name:"Coerência", desc:"Respiração de ressonância perto de seis respirações por minuto",
+          about:"Entre cinco e seis respirações por minuto é a «frequência de ressonância» do sistema cardiovascular, o ponto em que os ritmos da frequência cardíaca, da respiração e das ondas de pressão arterial se alinham e se reforçam mutuamente, produzindo uma variabilidade da frequência cardíaca incomumente alta. Praticar nesse ritmo é associado, em pesquisas, a uma melhor variabilidade cardíaca, menor ansiedade e uma regulação emocional mais estável ao longo do tempo. Respirações iguais de entrada e saída, sem retenções, mantêm você exatamente nessa ressonância, em vez de ultrapassá-la.",
+          notes:["Seis respirações por minuto — a frequência de ressonância clássica.",
+                 "Cinco respirações por minuto; um pouco mais lenta, para quem acha a respiração mais longa mais confortável."] }
+      }
+    },
+
+    zh: {
+      ready:"准备", complete:"完成", rest:"休息", preview:"预览",
+      getReady:"准备开始", emptyLungs:"把肺里的气完全呼出",
+      orPressPlay:"或点击播放开始自定义计划",
+      programTitle:"计划", doneBtn:"完成", adjustBtn:"调整",
+      howToBreatheTitle:"如何呼吸",
+      howToBreatheP1:"这是最自然的呼吸方式——婴儿天生就是这样呼吸的，只是长大后，我们渐渐被教会了用胸腔呼吸。",
+      howToBreatheP2:"吸气时，肚子鼓起来；呼气时，肚子收回去。就是这么简单——这个动作能让氧气到达肺部最底层、血流最丰富的部分。",
+      sessionsLabel:"疗程", customizeLabel:"自定义你的计划", addBlockBtn:"+ 添加阶段",
+      durationLabel:"时长", restFieldLabel:"休息", minUnit:"分钟",
+      softnessLabel:"过渡柔和度",
+      breatheToggleLabel:"灯光随呼吸起伏变化",
+      awakeToggleLabel:"播放时保持屏幕常亮",
+      soundToggleLabel:"每个阶段开始时响起轻柔的钟声",
+      gongVoiceLabel:"钟声音色", hearBtn:"试听", volumeLabel:"音量",
+      startBtn:"开始", customizeThisOneBtn:"在下方自定义此计划",
+      customLabel:"自定义", languageLabel:"语言",
+      phaseNames:["吸气","屏息","呼气","屏息"],
+      voices:{ temple:"寺庙钟", bowl:"颂钵", crystal:"水晶音", deep:"低沉锣声", mallet:"柔和木槌", chime:"风铃" },
+      needsPhase:function(n){ return "第"+n+"阶段至少需要一个大于零秒的呼吸时长。"; },
+      addTimeFirst:"请先为你的计划添加一些时长。",
+      loadedMsg:function(name){ return "已载入"+name+"——请在下方自定义"; },
+      blockTitle:function(n){ return "第"+n+"阶段"; },
+      blockOf:function(n,total){ return "第"+n+"阶段，共"+total+"阶段"; },
+      restNext:function(n){ return "休息 · 下一阶段：第"+n+"阶段"; },
+      doneSuffix:function(dur){ return dur+" 已完成"; },
+      minutesShort:function(m){ return m+" 分钟"; },
+      hoursMinutes:function(h,mm){ return h+"小时"+mm+"分钟"; },
+      partsWord:function(n){ return n + " 部分"; },
+      blocksCount:function(n){ return n + " 个阶段"; },
+      startSessionAria:"开始疗程", pauseSessionAria:"暂停疗程",
+      resumeSessionAria:"继续疗程", startAgainAria:"重新开始",
+      resetSessionAria:"重置疗程",
+      moveUpAria:"上移阶段", moveDownAria:"下移阶段", removeBlockAria:"删除阶段",
+      colourAria:function(ph,n){ return ph+"颜色，第"+n+"阶段"; },
+      secondsAria:function(ph,n){ return ph+"秒数，第"+n+"阶段"; },
+      startPresetAria:function(name){ return "开始「"+name+"」疗程"; },
+      presets:{
+        calm:{ name:"平静", desc:"缓缓进入缓慢、安定的节奏",
+          about:"每分钟约六次呼吸，能让自主神经系统的平衡向副交感神经（“休息与消化”系统）倾斜。真正起作用的是呼气：呼气比吸气更长时，迷走神经张力会上升，心率随每次呼气而减慢，整体的紧张感也随之下降。这个练习先以均匀的方块呼吸让你安定下来并调节体内二氧化碳水平，然后逐渐把呼气拉长到 1:2 的比例，让放松的效果慢慢累积，而不是被强迫产生。十分钟左右正是这种转变得以稳固所需要的时间。",
+          notes:["均匀的方块呼吸——简单易行，先稳定注意力并平衡二氧化碳水平，再开始延长呼气的练习。",
+                 "呼气开始比吸气更长；从这里起，心率会随每次呼气而下降。",
+                 "完整的 1:2 比例——副交感神经作用最强的阶段——保持足够长的时间，让平静的状态稳固下来。"] },
+        focus:{ name:"专注", desc:"稳定的方块呼吸，让注意力更敏锐",
+          about:"方块呼吸——吸气、屏息、呼气、屏息时长相等——常用于高压职业，因为它同时做到两件事。稳定如节拍器般的节奏，能让心率变异性形成平滑、协调的模式，与稳定、从容的前额叶活动相呼应；两次屏息还能温和地提高你对二氧化碳的耐受度，减少压力激增时过度换气的冲动。十分钟足以让这种节奏稳固下来，又不会让你昏昏欲睡。",
+          notes:["经典的 4 拍方块呼吸；用四分钟找到节奏，让它自然带动你。",
+                 "更长的 5 拍方块呼吸会把你带到每分钟约三次呼吸，在你适应之后带来更深的安定。"] },
+        energize:{ name:"提振", desc:"以吸气为主、节奏明快的呼吸，提升状态",
+          about:"清醒感与更快、偏重吸气的呼吸相关，这种呼吸会轻微激活交感神经，略微提高心率。吸气顶点处的短暂屏息能提升摄氧量，又不会像持续快速呼吸那样让人头晕。这个练习特意以均匀的节奏收尾，让你结束时感到清醒、清晰，而不是紧绷亢奋——这是一次温和的推动，而不是猛烈的冲击。",
+          notes:["节奏明快、以吸气为主，顶端有短暂屏息——带来轻微的交感神经激活。",
+                 "更饱满的吸气带来更大的胸腔扩张，唤醒感也略强一些。",
+                 "以均匀的节奏收尾，在你继续一天的生活之前，让神经系统恢复平衡。"] },
+        unwind:{ name:"放松", desc:"以 4-7-8 呼吸法缓缓步入睡眠",
+          about:"由安德鲁·韦尔博士推广的 4-7-8 呼吸法，将长时间屏息与长度是吸气两倍的呼气结合在一起。屏息会让体内二氧化碳略微升高，这本身就有安定作用；而延长的呼气会激活降低心率和血压的迷走神经刹车——这正是入睡前身体需要的生理状态。这个练习通过两个较温和的阶段逐步过渡，让你到达完整节奏时，七拍的屏息感觉自然，而不费力。",
+          notes:["先安定下来、放慢节奏——均匀的方块呼吸，暂时还没有长时间屏息。",
+                 "过渡阶段，以适中的拍数引入屏息与较长的呼气。",
+                 "完整的 4-7-8 呼吸法，持续四分钟，带你走向睡眠。"] },
+        reset:{ name:"重启", desc:"五分钟的午间重启",
+          about:"只需一小段延长呼气的缓慢呼吸，就足以打断压力的恶性循环：哪怕只有两三分钟、比例约为 1:1.5 的呼吸，也能明显降低心率与主观紧张感。这是最简版本——先用一个阶段快速平复情绪，再用一个方块呼吸阶段，让你带着清醒的头脑而不是倦怠感回到工作中。",
+          notes:["延长呼气，快速降低紧张感。",
+                 "短暂的方块呼吸，在你回到手头的事情之前先稳住注意力。"] },
+        coherence:{ name:"谐振", desc:"每分钟约六次呼吸的谐振呼吸",
+          about:"每分钟五到六次呼吸，正是心血管系统的“谐振频率”——此时心率、呼吸与血压波动的节奏相互对齐、相互增强，产生异常显著的心率变异性。研究表明，长期以这个节奏练习与心率变异性提升、焦虑降低以及情绪调节更稳定有关。均匀、不带屏息的吸气与呼气，能让你稳稳停留在这个谐振点上，而不会超过它。",
+          notes:["每分钟六次呼吸——经典的谐振频率。",
+                 "每分钟五次呼吸，稍慢一些，适合觉得较长呼吸更舒适的人。"] }
+      }
+    },
+
+    hi: {
+      ready:"तैयार", complete:"पूर्ण", rest:"विश्राम", preview:"पूर्वावलोकन",
+      getReady:"तैयार हो जाइए", emptyLungs:"अपने फेफड़ों को पूरी तरह खाली करें",
+      orPressPlay:"या अपने खुद के कार्यक्रम के लिए प्ले दबाएँ",
+      programTitle:"कार्यक्रम", doneBtn:"हो गया", adjustBtn:"समायोजित करें",
+      howToBreatheTitle:"कैसे सांस लें",
+      howToBreatheP1:"यह सबसे स्वाभाविक सांस है — बच्चे इसी तरह सांस लेते हैं, इससे पहले कि जीवन हमें छाती से सांस लेना सिखा दे।",
+      howToBreatheP2:"सांस अंदर लें: आपका पेट बाहर आता है। सांस बाहर छोड़ें: आपका पेट अंदर जाता है। बस इतना ही — यह सरल गति ऑक्सीजन को आपके फेफड़ों के सबसे निचले और सबसे समृद्ध हिस्से तक पहुँचाती है।",
+      sessionsLabel:"सत्र", customizeLabel:"अपना खुद का बनाएँ", addBlockBtn:"+ ब्लॉक जोड़ें",
+      durationLabel:"अवधि", restFieldLabel:"विश्राम", minUnit:"मिनट",
+      softnessLabel:"परिवर्तन की कोमलता",
+      breatheToggleLabel:"लालटेन सांस के साथ फूलती और घटती है",
+      awakeToggleLabel:"चलते समय स्क्रीन को जागृत रखें",
+      soundToggleLabel:"हर चरण की शुरुआत में एक हल्की घंटी बजाएँ",
+      gongVoiceLabel:"घंटी की ध्वनि", hearBtn:"सुनें", volumeLabel:"आवाज़",
+      startBtn:"शुरू करें", customizeThisOneBtn:"इसे नीचे अनुकूलित करें",
+      customLabel:"अनुकूलित", languageLabel:"भाषा",
+      phaseNames:["सांस लें","रोकें","छोड़ें","रोकें"],
+      voices:{ temple:"मंदिर की घंटी", bowl:"गायन कटोरा", crystal:"क्रिस्टल", deep:"गहरा गोंग", mallet:"मुलायम हथौड़ी", chime:"पवन घंटी" },
+      needsPhase:function(n){ return "ब्लॉक "+n+" को शून्य से अधिक की कम से कम एक सांस चाहिए।"; },
+      addTimeFirst:"पहले अपने कार्यक्रम में कुछ समय जोड़ें।",
+      loadedMsg:function(name){ return name+" लोड हुआ — इसे नीचे अनुकूलित करें"; },
+      blockTitle:function(n){ return "ब्लॉक "+n; },
+      blockOf:function(n,total){ return "ब्लॉक "+n+" (कुल "+total+")"; },
+      restNext:function(n){ return "विश्राम · अगला ब्लॉक "+n; },
+      doneSuffix:function(dur){ return dur+" पूर्ण"; },
+      minutesShort:function(m){ return m+" मिनट"; },
+      hoursMinutes:function(h,mm){ return h+" घं. "+mm+" मि."; },
+      partsWord:function(n){ return n+" भाग"; },
+      blocksCount:function(n){ return n+" ब्लॉक"; },
+      startSessionAria:"सत्र शुरू करें", pauseSessionAria:"सत्र रोकें",
+      resumeSessionAria:"सत्र फिर से शुरू करें", startAgainAria:"फिर से शुरू करें",
+      resetSessionAria:"सत्र रीसेट करें",
+      moveUpAria:"ब्लॉक ऊपर ले जाएँ", moveDownAria:"ब्लॉक नीचे ले जाएँ", removeBlockAria:"ब्लॉक हटाएँ",
+      colourAria:function(ph,n){ return ph+" रंग, ब्लॉक "+n; },
+      secondsAria:function(ph,n){ return ph+" सेकंड, ब्लॉक "+n; },
+      startPresetAria:function(name){ return name+" सत्र शुरू करें"; },
+      presets:{
+        calm:{ name:"शांति", desc:"धीमी, स्थिर लय में उतरें",
+          about:"लगभग छह सांस प्रति मिनट की दर से सांस लेना स्वायत्त तंत्रिका तंत्र का संतुलन परानुकंपी तंत्र — यानी 'आराम और पाचन' शाखा — की ओर मोड़ देता है। सबसे अधिक काम सांस छोड़ने से होता है: जब सांस छोड़ना सांस लेने से लंबा होता है, तो वेगस तंत्रिका की सक्रियता बढ़ती है, हर सांस छोड़ने पर हृदय गति धीमी होती है, और समग्र उत्तेजना कम होती है। यह सत्र एक समान बॉक्स पैटर्न से शुरू होता है जो आपको स्थिर करता है और CO₂ को नियंत्रित करता है, फिर धीरे-धीरे सांस छोड़ने को 1:2 अनुपात की ओर बढ़ाता है ताकि शांति का प्रभाव जबरदस्ती के बजाय धीरे-धीरे बने। दस मिनट लगभग उतना ही समय है जितना इस बदलाव को स्थिर होने में लगता है।",
+          notes:["समान बॉक्स श्वास — सरल, ध्यान को स्थिर करती है और सांस छोड़ने के काम से पहले CO₂ को संतुलित करती है।",
+                 "अब सांस छोड़ना सांस लेने से लंबा है; यहीं से हर सांस छोड़ने पर हृदय गति घटने लगती है।",
+                 "पूरा 1:2 अनुपात — सबसे मजबूत परानुकंपी प्रभाव — इतनी देर तक बनाए रखा जाता है कि शांति की स्थिति टिक जाए।"] },
+        focus:{ name:"एकाग्रता", desc:"ध्यान को तेज़ करने के लिए स्थिर बॉक्स श्वास",
+          about:"बॉक्स श्वास — बराबर समय की सांस लेना, रोकना, छोड़ना, रोकना — उच्च-दबाव वाले पेशों में आम है क्योंकि यह एक साथ दो काम करती है। यह मेट्रोनोम जैसी लय हृदय गति परिवर्तनशीलता को एक सहज, सुसंगत पैटर्न में ढालती है जो स्थिर, शांत मस्तिष्क गतिविधि के साथ जुड़ी होती है; और दोनों सांस-विराम धीरे-धीरे आपकी CO₂ सहनशीलता बढ़ाते हैं, जिससे तनाव बढ़ने पर अधिक सांस लेने की इच्छा कम होती है। दस मिनट इतने पर्याप्त हैं कि यह लय स्थिर हो जाए, बिना आपको नींद की ओर ले जाए।",
+          notes:["मानक 4-गिनती वाला बॉक्स; चार मिनट में लय को पकड़ें और उसे खुद चलने दें।",
+                 "एक लंबा 5-गिनती वाला बॉक्स आपको लगभग तीन सांस प्रति मिनट तक ले आता है, गर्म होने के बाद और गहरी स्थिरता के लिए।"] },
+        energize:{ name:"ऊर्जा", desc:"तेज़, सांस-लेने-प्रधान सांसें जो आपकी स्थिति को ऊपर उठाती हैं",
+          about:"सजगता एक तेज़, सांस-लेने की ओर झुकी हुई सांस के साथ जुड़ी होती है, जो सहानुभूति तंत्र को हल्के से सक्रिय करती है और हृदय गति को थोड़ा बढ़ाती है। सांस लेने के शीर्ष पर एक छोटा विराम ऑक्सीजन ग्रहण को बेहतर बनाता है, बिना लगातार तेज़ सांस लेने से आने वाले चक्कर के। यह सत्र जानबूझकर एक समान पैटर्न पर समाप्त होता है ताकि आप उत्तेजित और स्पष्ट महसूस करें, न कि बेचैन — इसे एक हल्का धक्का समझें, झटका नहीं।",
+          notes:["तेज़ और सांस-लेने-प्रधान, ऊपर एक छोटे विराम के साथ — एक हल्की सहानुभूति सक्रियता।",
+                 "छाती के अधिक विस्तार और सजगता में थोड़ी बड़ी वृद्धि के लिए एक पूर्ण सांस।",
+                 "अपने दिन को जारी रखने से पहले तंत्रिका तंत्र को संतुलित करने के लिए एक समान समापन।"] },
+        unwind:{ name:"आराम", desc:"नींद की ओर 4-7-8 उतार",
+          about:"4-7-8 पैटर्न, जिसे डॉ. एंड्रयू वील ने लोकप्रिय बनाया, एक लंबे सांस-विराम को सांस लेने से दोगुनी लंबी सांस छोड़ने के साथ जोड़ता है। यह विराम CO₂ में हल्की वृद्धि करता है, जो स्वयं शांतिदायक है, और लंबी सांस छोड़ना उस वेगस ब्रेक को सक्रिय करता है जो हृदय गति और रक्तचाप को कम करता है — नींद में जाने के लिए शारीरिक तैयारी। यह कार्यक्रम दो हल्के ब्लॉकों के माध्यम से धीरे-धीरे आगे बढ़ता है ताकि जब आप पूरे पैटर्न तक पहुँचें, तो सात-गिनती वाला विराम स्वाभाविक लगे, मेहनत भरा नहीं।",
+          notes:["पहुँचें और धीमे हों — बिना किसी लंबे विराम के एक समान बॉक्स।",
+                 "एक मध्यवर्ती चरण जो मध्यम गिनती पर विराम और लंबी सांस छोड़ना शुरू करता है।",
+                 "पूरा 4-7-8, चार मिनट तक दोहराया गया, आपको नींद की ओर ले जाने के लिए।"] },
+        reset:{ name:"रीसेट", desc:"पाँच मिनट का दोपहर का रीसेट",
+          about:"लंबी सांस छोड़ने के साथ धीमी सांस की एक छोटी खुराक तनाव के चक्र को तोड़ने के लिए पर्याप्त है: लगभग 1:1.5 अनुपात में सिर्फ दो से तीन मिनट की सांस भी हृदय गति और महसूस किए गए तनाव को मापने योग्य रूप से कम कर देती है। यह न्यूनतम प्रभावी संस्करण है — जल्दी शांत होने के लिए एक ब्लॉक, फिर एक बॉक्स ब्लॉक ताकि आप सुस्ती के बजाय स्पष्ट दिमाग के साथ काम पर लौटें।",
+          notes:["उत्तेजना को तेज़ी से कम करने के लिए लंबी सांस छोड़ना।",
+                 "जो कर रहे थे उसे फिर से शुरू करने से पहले ध्यान स्थिर करने के लिए एक छोटा बॉक्स।"] },
+        coherence:{ name:"सामंजस्य", desc:"लगभग छह सांस प्रति मिनट की अनुनाद श्वास",
+          about:"प्रति मिनट लगभग पाँच से छह सांसें हृदय-रक्त प्रणाली की 'अनुनाद आवृत्ति' है, जहाँ हृदय गति, सांस और रक्तचाप तरंगों की लय आपस में मेल खाती और एक-दूसरे को बढ़ाती हैं, जिससे असामान्य रूप से बड़ी हृदय गति परिवर्तनशीलता उत्पन्न होती है। शोध में इस दर पर अभ्यास करने को बेहतर हृदय गति परिवर्तनशीलता, कम चिंता और समय के साथ अधिक स्थिर भावनात्मक नियमन से जोड़ा गया है। बिना किसी विराम के बराबर सांस लेना और छोड़ना आपको उस अनुनाद पर ठीक टिकाए रखता है, उससे आगे बढ़ाए बिना।",
+          notes:["छह सांस प्रति मिनट — शास्त्रीय अनुनाद दर।",
+                 "पाँच सांस प्रति मिनट; जिन्हें लंबी सांस अधिक आरामदायक लगती है, उनके लिए थोड़ी धीमी।"] }
+      }
+    },
+
+    ar: {
+      ready:"جاهز", complete:"اكتمل", rest:"راحة", preview:"معاينة",
+      getReady:"استعد", emptyLungs:"أفرغ رئتيك تمامًا",
+      orPressPlay:"أو اضغط تشغيل لبرنامجك الخاص",
+      programTitle:"البرنامج", doneBtn:"تم", adjustBtn:"تعديل",
+      howToBreatheTitle:"كيف تتنفس",
+      howToBreatheP1:"هذا هو التنفس الأكثر طبيعية على الإطلاق — هكذا يتنفس الأطفال، قبل أن تعلّمنا الحياة التنفس من الصدر بدلاً من ذلك.",
+      howToBreatheP2:"عند الشهيق: بطنك يبرز للخارج. عند الزفير: بطنك يعود للداخل. هذا كل شيء — هذه الحركة البسيطة توصل الأكسجين إلى أدنى وأغنى جزء من رئتيك.",
+      sessionsLabel:"الجلسات", customizeLabel:"خصّص برنامجك الخاص", addBlockBtn:"+ إضافة مرحلة",
+      durationLabel:"المدة", restFieldLabel:"راحة", minUnit:"دقيقة",
+      softnessLabel:"نعومة الانتقال",
+      breatheToggleLabel:"الفانوس ينتفخ ويهدأ مع التنفس",
+      awakeToggleLabel:"إبقاء الشاشة مضاءة أثناء التشغيل",
+      soundToggleLabel:"إصدار رنين جونغ لطيف عند بداية كل مرحلة",
+      gongVoiceLabel:"نغمة الجونغ", hearBtn:"استماع", volumeLabel:"مستوى الصوت",
+      startBtn:"ابدأ", customizeThisOneBtn:"خصّص هذا البرنامج أدناه",
+      customLabel:"مخصّص", languageLabel:"اللغة",
+      phaseNames:["شهيق","حبس","زفير","حبس"],
+      voices:{ temple:"جرس المعبد", bowl:"وعاء الغناء", crystal:"كريستال", deep:"جونغ عميق", mallet:"مطرقة ناعمة", chime:"جرس الريح" },
+      needsPhase:function(n){ return "المرحلة "+n+" تحتاج إلى نَفَس واحد على الأقل أطول من صفر ثانية."; },
+      addTimeFirst:"أضف بعض الوقت إلى برنامجك أولاً.",
+      loadedMsg:function(name){ return "تم تحميل "+name+" — خصّصه أدناه"; },
+      blockTitle:function(n){ return "المرحلة "+n; },
+      blockOf:function(n,total){ return "المرحلة "+n+" من "+total; },
+      restNext:function(n){ return "راحة · المرحلة التالية "+n; },
+      doneSuffix:function(dur){ return dur+" — اكتمل"; },
+      minutesShort:function(m){ return m+" دقيقة"; },
+      hoursMinutes:function(h,mm){ return h+" س "+mm+" د"; },
+      partsWord:function(n){ return n===2 ? "جزآن" : n+" أجزاء"; },
+      blocksCount:function(n){ return n===1 ? "مرحلة واحدة" : (n===2 ? "مرحلتان" : n+" مراحل"); },
+      startSessionAria:"بدء الجلسة", pauseSessionAria:"إيقاف الجلسة مؤقتًا",
+      resumeSessionAria:"استئناف الجلسة", startAgainAria:"البدء من جديد",
+      resetSessionAria:"إعادة ضبط الجلسة",
+      moveUpAria:"نقل المرحلة لأعلى", moveDownAria:"نقل المرحلة لأسفل", removeBlockAria:"حذف المرحلة",
+      colourAria:function(ph,n){ return "لون "+ph+"، المرحلة "+n; },
+      secondsAria:function(ph,n){ return "ثواني "+ph+"، المرحلة "+n; },
+      startPresetAria:function(name){ return "بدء جلسة "+name; },
+      presets:{
+        calm:{ name:"هدوء", desc:"انزلق نحو إيقاع بطيء وهادئ",
+          about:"التنفس بمعدل ست مرات تقريبًا في الدقيقة يحوّل توازن الجهاز العصبي اللاإرادي نحو الجهاز السمبتاوي — فرع «الراحة والهضم». الرافعة التي تقوم بمعظم العمل هي الزفير: فعندما يكون الزفير أطول من الشهيق، يرتفع التوتر المبهمي، ويتباطأ القلب مع كل زفير، وينخفض التنبيه العام. تبدأ هذه الجلسة بنمط تنفس مربّع منتظم لتثبيتك وضبط ثاني أكسيد الكربون، ثم تُطيل الزفير تدريجيًا نحو نسبة 1:2 حتى يتشكل تأثير الهدوء تدريجيًا بدلاً من فرضه. عشر دقائق هي تقريبًا الوقت الذي يحتاجه هذا التحوّل ليستقر.",
+          notes:["تنفس مربّع منتظم — بسيط، يثبّت الانتباه ويوازن ثاني أكسيد الكربون قبل بدء العمل على الزفير.",
+                 "الزفير الآن أطول من الشهيق؛ هنا يبدأ معدل ضربات القلب بالانخفاض مع كل زفير.",
+                 "نسبة 1:2 كاملة — أقوى تأثير سمبتاوي — تُحفظ لوقت كافٍ لترسيخ حالة الهدوء."] },
+        focus:{ name:"تركيز", desc:"تنفس مربّع منتظم لشحذ الانتباه",
+          about:"التنفس المربّع — شهيق وحبس وزفير وحبس بمدد متساوية — أسلوب أساسي في المهن عالية الضغط لأنه يحقق هدفين معًا. الإيقاع المنتظم يقود تقلب معدل ضربات القلب نحو نمط سلس ومتماسك يرتبط بنشاط جبهي هادئ ومستقر؛ وفترتا الحبس ترفعان بلطف قدرتك على تحمّل ثاني أكسيد الكربون، فيقل الميل إلى التنفس المفرط عند تصاعد التوتر. عشر دقائق كافية لترسيخ هذا الإيقاع دون أن يقودك إلى النعاس.",
+          notes:["المربّع الكلاسيكي بأربع عدّات؛ أربع دقائق لالتقاط الإيقاع وتركه يقود نفسه.",
+                 "مربّع أطول بخمس عدّات يخفضك إلى نحو ثلاث أنفاس في الدقيقة لثبات أعمق بعد الإحماء."] },
+        energize:{ name:"نشاط", desc:"أنفاس سريعة يقودها الشهيق لرفع حالتك",
+          about:"تتبع اليقظة تنفسًا أسرع يميل نحو الشهيق، مما ينشّط الجهاز السمبثاوي قليلاً ويرفع معدل ضربات القلب بشكل طفيف. الحبس القصير في ذروة الشهيق يحسّن امتصاص الأكسجين دون الدوار المصاحب للتنفس السريع المستمر. تُختتم الجلسة عمدًا بنمط منتظم لتنهي الجلسة وأنت متيقظ وصافي الذهن لا متوترًا — اعتبرها دفعة لطيفة، لا صدمة.",
+          notes:["سريع ويغلب عليه الشهيق مع حبس قصير في الأعلى — تنشيط سمبثاوي خفيف.",
+                 "شهيق أعمق لتمدد أكبر في الصدر وارتفاع أكبر قليلاً في اليقظة.",
+                 "ختام منتظم يوازن الجهاز العصبي قبل أن تواصل يومك."] },
+        unwind:{ name:"استرخاء", desc:"هبوط بنمط 4-7-8 نحو النوم",
+          about:"نمط 4-7-8، الذي اشتهر على يد الدكتور أندرو ويل، يجمع بين حبس طويل للنفس وزفير أطول ضعف الشهيق. الحبس يرفع ثاني أكسيد الكربون قليلاً، وهو أمر مهدئ بحد ذاته، والزفير الممتد يفعّل الكابح المبهمي الذي يخفض معدل ضربات القلب وضغط الدم — وهو الإعداد الفسيولوجي للنوم. يتدرّج هذا البرنامج عبر مرحلتين ألطف حتى يبدو الحبس لسبع عدّات طبيعيًا لا متعِبًا عند الوصول إلى النمط الكامل.",
+          notes:["الوصول والتباطؤ — تنفس مربّع منتظم دون حبس طويل بعد.",
+                 "مرحلة انتقالية تُدخل الحبس والزفير الطويل بعدّات معتدلة.",
+                 "نمط 4-7-8 الكامل، يتكرر لأربع دقائق ليقودك نحو النوم."] },
+        reset:{ name:"إعادة ضبط", desc:"إعادة ضبط لمدة خمس دقائق في منتصف اليوم",
+          about:"جرعة قصيرة من التنفس البطيء مع زفير ممتد كافية لكسر دوامة التوتر: حتى دقيقتان إلى ثلاث دقائق من التنفس بنسبة تقارب 1:1.5 تخفضان معدل ضربات القلب والتوتر المُدرَك بشكل ملموس. هذه هي النسخة الأدنى الفعّالة — مرحلة لخفض التنبيه بسرعة، ثم مرحلة تنفس مربّع لتعود إلى عملك بذهن صافٍ لا خامل.",
+          notes:["زفير ممتد لخفض التنبيه بسرعة.",
+                 "تنفس مربّع قصير لتثبيت الانتباه قبل العودة إلى ما كنت تفعله."] },
+        coherence:{ name:"توافق", desc:"تنفس رنيني بمعدل ست أنفاس تقريبًا في الدقيقة",
+          about:"يمثّل معدل خمس إلى ست أنفاس في الدقيقة «تردد الرنين» للجهاز القلبي الوعائي، حيث تتوافق إيقاعات معدل ضربات القلب والتنفس وموجات ضغط الدم وتعزّز بعضها بعضًا، منتجةً تقلبًا استثنائيًا في معدل ضربات القلب. يرتبط التدرّب على هذا المعدل في الأبحاث بتحسّن تقلب معدل ضربات القلب، وانخفاض القلق، وتنظيم عاطفي أكثر ثباتًا مع الوقت. الشهيق والزفير المتساويان دون حبس يبقيانك بالضبط عند هذا الرنين دون تجاوزه.",
+          notes:["ست أنفاس في الدقيقة — تردد الرنين الكلاسيكي.",
+                 "خمس أنفاس في الدقيقة؛ أبطأ قليلاً لمن يجد النفس الأطول أكثر راحة."] }
+      }
+    }
+  };
+
+  function T(){ return I18N[S.lang] || I18N.en; }
+  function presetText(key){
+    var d = T().presets && T().presets[key];
+    if(d) return d;
+    var e = I18N.en.presets[key];
+    return e || { name:key, desc:'', about:'', notes:[] };
+  }
+  var TYPE_IDX = { inhale:0, holdFull:1, exhale:2, holdEmpty:3 };
+  function phaseName(type){ return T().phaseNames[TYPE_IDX[type]] || type; }
+  function detectLang(){
+    try{
+      var cands = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language];
+      for(var i=0;i<cands.length;i++){
+        var c = String(cands[i] || '').toLowerCase().slice(0,2);
+        if(LANGS.indexOf(c) !== -1) return c;
+      }
+    }catch(e){}
+    return 'en';
+  }
+
+  var RM = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  /* ---------- gong voices ------------------------------------------------
+     Each voice is a small bank of inharmonic partials (ratios against a
+     fundamental) plus decay / brightness / strike character. Every phase
+     gets its own pitch from TONE so the four parts stay distinct by ear
+     but harmonically related. */
+  var VOICES = {
+    temple:  { label:'Temple bell',  root:174.6, ratios:[1,2.76,5.40,8.93,11.34], decay:4.6, bright:0.55, strike:0.16, rDecay:0.55, beat:0    },
+    bowl:    { label:'Singing bowl', root:196.0, ratios:[1,2.83,5.18,8.80],        decay:7.0, bright:0.42, strike:0.05, rDecay:0.40, beat:0.9  },
+    crystal: { label:'Crystal',      root:392.0, ratios:[1,2.00,3.01,4.62,6.03],   decay:3.6, bright:0.85, strike:0.10, rDecay:0.70, beat:0.15 },
+    deep:    { label:'Deep gong',    root:82.41, ratios:[1,1.48,1.97,2.44,3.32,4.10], decay:8.0, bright:0.50, strike:0.22, rDecay:0.32, beat:1.1 },
+    mallet:  { label:'Soft mallet',  root:261.63,ratios:[1,3.00,6.50,9.20],         decay:1.4, bright:0.60, strike:0.30, rDecay:0.80, beat:0    },
+    chime:   { label:'Wind chime',   root:523.25,ratios:[1,2.76,5.40,8.93],         decay:2.8, bright:0.90, strike:0.14, rDecay:0.60, beat:0    }
+  };
+  /* semitone offset per phase: inhale lifts, exhale settles to the root */
+  var TONE = { inhale:7, holdFull:5, exhale:0, holdEmpty:3 };
+
+  /* ---------- colour maths: interpolate in OKLab for gentle blends ------- */
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+  function hexToRgb(hex){
+    hex = String(hex).replace('#','');
+    if(hex.length===3) hex = hex.split('').map(function(c){return c+c;}).join('');
+    var n = parseInt(hex,16);
+    return [(n>>16)&255,(n>>8)&255,n&255];
+  }
+  function sToLin(c){ c/=255; return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055,2.4); }
+  function linToS(c){
+    var v = c<=0.0031308 ? c*12.92 : 1.055*Math.pow(c,1/2.4)-0.055;
+    return Math.round(clamp(v,0,1)*255);
+  }
+  function rgbToOklab(r,g,b){
+    r=sToLin(r); g=sToLin(g); b=sToLin(b);
+    var l=0.4122214708*r+0.5363325363*g+0.0514459929*b;
+    var m=0.2119034982*r+0.6806995451*g+0.1073969566*b;
+    var s=0.0883024619*r+0.2817188376*g+0.6299787005*b;
+    l=Math.cbrt(l); m=Math.cbrt(m); s=Math.cbrt(s);
+    return [
+      0.2104542553*l+0.7936177850*m-0.0040720468*s,
+      1.9779984951*l-2.4285922050*m+0.4505937099*s,
+      0.0259040371*l+0.7827717662*m-0.8086757660*s
+    ];
+  }
+  function oklabToRgb(L,a,b){
+    var l_=L+0.3963377774*a+0.2158037573*b;
+    var m_=L-0.1055613458*a-0.0638541728*b;
+    var s_=L-0.0894841775*a-1.2914855480*b;
+    var l=l_*l_*l_, m=m_*m_*m_, s=s_*s_*s_;
+    return [
+      linToS( 4.0767416621*l-3.3077115913*m+0.2309699292*s),
+      linToS(-1.2684380046*l+2.6097574011*m-0.3413193965*s),
+      linToS(-0.0041960863*l-0.7034186147*m+1.7076147010*s)
+    ];
+  }
+  function mix3(a,b,p){ return [a[0]+(b[0]-a[0])*p, a[1]+(b[1]-a[1])*p, a[2]+(b[2]-a[2])*p]; }
+  function smooth(p){ p=clamp(p,0,1); return p*p*(3-2*p); }
+
+  /* ---------- state ---------------------------------------------------- */
+  function sanPhases(rp){
+    var src = (rp && rp.length === 4) ? rp : DEFAULT_PHASES;
+    return src.map(function(p,i){
+      return {
+        sec: clamp(parseFloat(p && p.sec) || 0, 0, 60),
+        color: /^#[0-9a-f]{6}$/i.test(p && p.color) ? p.color.toLowerCase() : DEFAULT_PHASES[i].color
+      };
+    });
+  }
+  function sanBlock(rb){
+    return {
+      phases: sanPhases(rb && rb.phases),
+      minutes: clamp(parseFloat(rb && rb.minutes) || 5, 0.5, 180),
+      brk: clamp((rb && rb.brk != null) ? parseFloat(rb.brk) : 1, 0, 60)
+    };
+  }
+  function load(){
+    var raw = null;
+    try{ raw = JSON.parse(localStorage.getItem(KEY)); }catch(e){}
+    var blocks;
+    if(raw && Array.isArray(raw.blocks) && raw.blocks.length){
+      blocks = raw.blocks.slice(0, MAX_BLOCKS).map(sanBlock);
+    }else if(raw && Array.isArray(raw.phases) && raw.phases.length === 4){
+      blocks = [ sanBlock({ phases: raw.phases, minutes: raw.minutes, brk: 0 }) ]; // migrate v1 single session
+    }else{
+      blocks = [ defaultBlock() ];
+    }
+    return {
+      blocks: blocks,
+      soft:   clamp((raw && raw.soft != null) ? parseFloat(raw.soft) : 55, 0, 100),
+      breathe: !raw || raw.breathe !== false,
+      awake:  !!(raw && raw.awake),
+      sound:  !!(raw && raw.sound),
+      voice:  (raw && VOICES[raw.voice]) ? raw.voice : 'temple',
+      vol:    clamp((raw && raw.vol != null) ? parseFloat(raw.vol) : 30, 0, 100),
+      preset: (raw && typeof raw.preset === 'string') ? raw.preset : null,
+      lang:   (raw && LANGS.indexOf(raw.lang) !== -1) ? raw.lang : detectLang()
+    };
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+  var S = load();
+
+  /* ---------- audio engine (synthesised gongs) -------------------------- */
+  var audio = null;
+
+  function makeIR(ctx, dur, tail){
+    var len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    var buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for(var ch=0; ch<2; ch++){
+      var d = buf.getChannelData(ch);
+      for(var i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, tail);
+    }
+    return buf;
+  }
+
+  function ensureAudio(){
+    if(audio) return audio;
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return null;
+    var ctx = new Ctx();
+
+    var comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -20; comp.knee.value = 22; comp.ratio.value = 3;
+    comp.attack.value = 0.005; comp.release.value = 0.25;
+
+    var vol = ctx.createGain();
+    vol.gain.value = clamp(S.vol,0,100) / 100 * 0.5;
+
+    var lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 5400; lp.Q.value = 0.2;
+
+    var dry = ctx.createGain(); dry.gain.value = 0.9;
+    var wet = ctx.createGain(); wet.gain.value = 0.32;
+    var conv = ctx.createConvolver(); conv.buffer = makeIR(ctx, 2.6, 3.0);
+
+    dry.connect(lp);
+    wet.connect(conv); conv.connect(lp);
+    lp.connect(comp); comp.connect(vol); vol.connect(ctx.destination);
+
+    var nb = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.3), ctx.sampleRate);
+    var nd = nb.getChannelData(0);
+    for(var i=0;i<nd.length;i++) nd[i] = Math.random()*2-1;
+
+    audio = { ctx:ctx, vol:vol, dry:dry, wet:wet, noise:nb };
+    return audio;
+  }
+
+  function setVol(){
+    if(audio) audio.vol.gain.setTargetAtTime(clamp(S.vol,0,100)/100*0.5, audio.ctx.currentTime, 0.02);
+  }
+
+  function resumeAudio(){
+    if(audio && audio.ctx.state === 'suspended') audio.ctx.resume();
+  }
+
+  function playGong(phaseType, when){
+    var a = ensureAudio();
+    if(!a) return;
+    var v = VOICES[S.voice] || VOICES.temple;
+    var t = when || a.ctx.currentTime + 0.02;
+    var f0 = v.root * Math.pow(2, (TONE[phaseType] || 0) / 12);
+
+    var voiceGain = a.ctx.createGain();
+    voiceGain.gain.value = 0.9;
+    voiceGain.connect(a.dry); voiceGain.connect(a.wet);
+
+    var norm = 0, i;
+    for(i=0;i<v.ratios.length;i++) norm += 1 / Math.pow(i+1, 0.8);
+
+    for(i=0;i<v.ratios.length;i++){
+      var r = v.ratios[i];
+      var amp = (1 / Math.pow(i+1, 0.8)) / norm * (0.55 + v.bright * 0.9 / (1 + i));
+      var dec = v.decay / (1 + i * v.rDecay);
+
+      var g = a.ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(amp, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.00016, t + 0.006 + dec);
+      g.connect(voiceGain);
+
+      var voices = v.beat ? 2 : 1;
+      for(var k=0;k<voices;k++){
+        var o = a.ctx.createOscillator();
+        o.type = 'sine';
+        var detune = k === 0 ? 0 : v.beat * (2.4 + i * 1.6); // cents -> slow shimmer/beating
+        o.frequency.value = f0 * r;
+        if(detune) o.detune.value = detune;
+        o.connect(g);
+        o.start(t);
+        o.stop(t + 0.05 + dec);
+      }
+    }
+
+    if(v.strike > 0){
+      var src = a.ctx.createBufferSource(); src.buffer = a.noise;
+      var bp = a.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = Math.min(6500, f0 * 6); bp.Q.value = 0.8;
+      var sg = a.ctx.createGain();
+      sg.gain.setValueAtTime(0.0001, t);
+      sg.gain.linearRampToValueAtTime(v.strike * 0.5, t + 0.002);
+      sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      src.connect(bp); bp.connect(sg); sg.connect(voiceGain);
+      src.start(t); src.stop(t + 0.12);
+    }
+  }
+
+  function previewVoice(){
+    var a = ensureAudio();
+    if(!a) return;
+    resumeAudio();
+    var order = ['inhale','holdFull','exhale','holdEmpty'];
+    var t0 = a.ctx.currentTime + 0.05;
+    order.forEach(function(ty, i){ playGong(ty, t0 + i * 0.85); });
+  }
+
+  /* ---------- one block's breathing cycle ------------------------------ */
+  var SCALE_TARGETS = { inhale:[0,1], holdFull:[1,1], exhale:[1,0], holdEmpty:[0,0] };
+  var REST_RGB = [66, 76, 94];   // dim neutral slate for the rest between blocks
+
+  function buildCycle(phases, soft){
+    var act = [], acc = 0;
+    phases.forEach(function(p,i){
+      if(p.sec > 0){
+        var rgb = hexToRgb(p.color);
+        act.push({
+          type:TYPES[i], dur:p.sec, start:acc, end:acc+p.sec,
+          rgb:rgb, ok:rgbToOklab(rgb[0],rgb[1],rgb[2])
+        });
+        acc += p.sec;
+      }
+    });
+    var n = act.length, bounds = [];
+    if(n >= 2){
+      for(var i=0;i<n;i++){
+        var A = act[i], B = act[(i+1)%n];
+        var w = (soft/100) * 0.5 * Math.min(A.dur, B.dur);
+        bounds.push({ pos:A.end, w:w, a:A.ok, b:B.ok });
+      }
+    }
+    return { n:n, phases:act, bounds:bounds, C:acc };
+  }
+
+  function phaseAt(cyc, t){
+    var C = cyc.C, tt = ((t % C) + C) % C;
+    for(var i=0;i<cyc.n;i++){
+      var ph = cyc.phases[i];
+      if(tt >= ph.start && tt < ph.end) return ph;
+    }
+    return cyc.phases[cyc.n-1] || null;
+  }
+
+  function colorAt(cyc, t){
+    var C = cyc.C;
+    if(cyc.n === 0) return REST_RGB.slice();
+    if(cyc.n === 1) return cyc.phases[0].rgb;
+    for(var i=0;i<cyc.bounds.length;i++){
+      var bd = cyc.bounds[i];
+      if(bd.w <= 0) continue;
+      var d = t - bd.pos;
+      d = ((d % C) + C) % C;
+      if(d > C/2) d -= C;
+      if(Math.abs(d) <= bd.w){
+        var p = smooth((d + bd.w) / (2*bd.w));
+        var ok = mix3(bd.a, bd.b, p);
+        return oklabToRgb(ok[0], ok[1], ok[2]);
+      }
+    }
+    var ph = phaseAt(cyc, t);
+    return ph ? ph.rgb : REST_RGB.slice();
+  }
+
+  function scaleAt(cyc, t){
+    var C = cyc.C, ph = phaseAt(cyc, t);
+    if(!ph) return 0.5;
+    var lp = ph.dur > 0 ? (((t % C) + C) % C - ph.start) / ph.dur : 0;
+    var tg = SCALE_TARGETS[ph.type] || [0.5,0.5];
+    var e = 0.5 - 0.5*Math.cos(Math.PI*clamp(lp,0,1));
+    return tg[0] + (tg[1]-tg[0])*e;
+  }
+
+  /* ---------- the whole program: blocks + rests laid on one timeline --- */
+  var prog = { segs:[], total:0, blocks:1, valid:true, badBlock:-1 };
+
+  function rebuild(){
+    var segs = [], acc = 0, valid = true, bad = -1;
+    S.blocks.forEach(function(b, bi){
+      var cyc = buildCycle(b.phases, S.soft);
+      if(cyc.C <= 0){ valid = false; if(bad < 0) bad = bi; }
+      var dur = Math.max(1, Math.round(b.minutes * 60));
+      segs.push({ kind:'breath', bi:bi, start:acc, dur:dur, cyc:cyc });
+      acc += dur;
+      var isLast = bi === S.blocks.length - 1;
+      if(!isLast && b.brk > 0){
+        var rd = Math.round(b.brk * 60);
+        segs.push({ kind:'rest', bi:bi, nextBi:bi + 1, start:acc, dur:rd });
+        acc += rd;
+      }
+    });
+    prog = { segs:segs, total:acc, blocks:S.blocks.length, valid:valid, badBlock:bad };
+    updateDockState();
+    buildTicks();
+    updateProgSum();
+    updatePlayColor();
+  }
+
+  /* the play button always wears the program's own inhale colour */
+  function updatePlayColor(){
+    var hex = (S.blocks[0] && S.blocks[0].phases[0] && S.blocks[0].phases[0].color) || '#46c6d8';
+    var rgb = hexToRgb(hex);
+    playBtn.style.setProperty('--play-c', hex);
+    playBtn.style.setProperty('--play-glow', 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',.45)');
+    playBtn.style.setProperty('--play-glow-soft', 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',.18)');
+  }
+
+  function segAt(t){
+    for(var i=0;i<prog.segs.length;i++){
+      var s = prog.segs[i];
+      if(t < s.start + s.dur) return { seg:s, idx:i };
+    }
+    var L = prog.segs.length - 1;
+    return { seg:prog.segs[L], idx:L };
+  }
+
+  function human(sec){
+    var m = Math.round(sec / 60);
+    if(m < 60) return T().minutesShort(m);
+    return T().hoursMinutes(Math.floor(m/60), String(m % 60).padStart(2,'0'));
+  }
+
+  /* ---------- "get ready" prep breath ------------------------------------
+     One clearing breath before every fresh start: a short inhale, then a
+     full, unhurried exhale, so the session never begins mid-thought. Colour
+     borrows the program's own first inhale/exhale hues for continuity, but
+     the timing is linear (not a looping cycle) since it only ever runs once. */
+  var PREP_IN = 2, PREP_OUT = 4, PREP_TOTAL = PREP_IN + PREP_OUT;
+
+  function prepColor(t){
+    var b = S.blocks[0];
+    var inRgb  = hexToRgb((b && b.phases[0] && b.phases[0].color) || '#46c6d8');
+    var outRgb = hexToRgb((b && b.phases[2] && b.phases[2].color) || '#3f5e9e');
+    var w = 0.6;
+    if(t <= PREP_IN - w) return inRgb;
+    if(t >= PREP_IN + w) return outRgb;
+    var p = smooth((t - (PREP_IN - w)) / (2*w));
+    var ok = mix3(rgbToOklab(inRgb[0],inRgb[1],inRgb[2]), rgbToOklab(outRgb[0],outRgb[1],outRgb[2]), p);
+    return oklabToRgb(ok[0], ok[1], ok[2]);
+  }
+  function prepScale(t){
+    if(t <= PREP_IN){
+      var lp = clamp(t / PREP_IN, 0, 1);
+      return 0.5 - 0.5*Math.cos(Math.PI*lp);           // 0 -> 1, filling
+    }
+    var lp2 = clamp((t - PREP_IN) / PREP_OUT, 0, 1);
+    return 1 - (0.5 - 0.5*Math.cos(Math.PI*lp2));       // 1 -> 0, emptying
+  }
+
+  /* ---------- rendering ------------------------------------------------ */
+  var orbWrap=$('#orbWrap'), phaseWord=$('#phaseWord'), phaseCount=$('#phaseCount'),
+      subline=$('#subline'), hint=$('#hint'), progRing=$('#prog'), tip=$('#tip'),
+      ticksEl=$('#ticks'), progSum=$('#progSum'),
+      elapsedEl=$('#elapsed'), totalEl=$('#total'), dock=$('#dock'), playBtn=$('#play');
+
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  function fmt(sec){
+    var s = Math.max(0, Math.floor(sec));
+    return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+  }
+
+  function programLabel(){
+    if(S.preset === 'custom') return T().customLabel;
+    var pre = S.preset && presetByKey(S.preset);
+    if(pre) return presetText(pre.key).name;
+    return T().blocksCount(prog.blocks);
+  }
+  function programSummary(){ return programLabel() + ' · ' + human(prog.total); }
+  function updateProgSum(){
+    progSum.textContent = programSummary();
+    markActiveChip();
+  }
+
+  function buildTicks(){
+    while(ticksEl.firstChild) ticksEl.removeChild(ticksEl.firstChild);
+    if(prog.total <= 0) return;
+    prog.segs.forEach(function(s){
+      if(s.start <= 0) return;
+      var a = (s.start / prog.total * 360 - 90) * Math.PI / 180;
+      var ln = document.createElementNS(SVGNS, 'line');
+      ln.setAttribute('x1', (50 + 43.5*Math.cos(a)).toFixed(2));
+      ln.setAttribute('y1', (50 + 43.5*Math.sin(a)).toFixed(2));
+      ln.setAttribute('x2', (50 + 50.5*Math.cos(a)).toFixed(2));
+      ln.setAttribute('y2', (50 + 50.5*Math.sin(a)).toFixed(2));
+      ln.setAttribute('class', 'tick');
+      ticksEl.appendChild(ln);
+    });
+  }
+
+  function applyOrb(rgb, s){
+    var vs = (S.breathe && !RM) ? (0.82 + 0.34*clamp(s,0,1)) : 1;
+    var ga = (0.28 + 0.32*clamp(s,0,1)).toFixed(3);
+    orbWrap.style.setProperty('--c', 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')');
+    orbWrap.style.setProperty('--glow', 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + ga + ')');
+    orbWrap.style.setProperty('--s', vs.toFixed(4));
+  }
+
+  function applyRing(p){
+    progRing.setAttribute('stroke-dashoffset', String(1 - clamp(p,0,1)));
+    if(!started || p <= 0){ tip.style.opacity = 0; return; }
+    var a = (p*360 - 90) * Math.PI/180;
+    tip.setAttribute('cx', (50 + 47*Math.cos(a)).toFixed(2));
+    tip.setAttribute('cy', (50 + 47*Math.sin(a)).toFixed(2));
+    tip.style.opacity = 1;
+  }
+
+  function setReadout(word, count){
+    if(phaseWord.textContent !== word) phaseWord.textContent = word;
+    if(phaseCount.textContent !== count) phaseCount.textContent = count;
+  }
+  function setSub(txt){ if(subline.textContent !== txt) subline.textContent = txt; }
+
+  var started=false, playing=false, finished=false, elapsed=0, last=0,
+      lastPhaseIdx=-1, lastSegIdx=-1, panelOpen=false, previewT=0,
+      prepping=false, prepElapsed=0;
+
+  function blockCycle(bi){
+    for(var i=0;i<prog.segs.length;i++){
+      var s = prog.segs[i];
+      if(s.kind === 'breath' && s.bi === bi) return s.cyc;
+    }
+    return prog.segs[0] && prog.segs[0].cyc;
+  }
+
+  function draw(){
+    totalEl.textContent = fmt(prog.total);
+    hint.style.opacity = (started || prepping) ? '0' : '';
+    if(quickstartEl) quickstartEl.hidden = started || prepping || panelOpen;
+
+    if(prepping){
+      var pt = clamp(prepElapsed, 0, PREP_TOTAL);
+      applyOrb(prepColor(pt), prepScale(pt));
+      applyRing(0);
+      if(pt < PREP_IN){
+        setReadout(phaseName('inhale'), String(Math.max(1, Math.ceil(PREP_IN - pt - 1e-6))));
+        setSub(T().getReady);
+      }else{
+        setReadout(phaseName('exhale'), String(Math.max(1, Math.ceil(PREP_TOTAL - pt - 1e-6))));
+        setSub(T().emptyLungs);
+      }
+      elapsedEl.textContent = '0:00';
+      return;
+    }
+
+    if(!started){
+      var pbi = openBlock >= 0 ? openBlock : 0;
+      var pcyc = blockCycle(pbi);
+      if(panelOpen && prog.valid && pcyc && pcyc.C > 0){
+        // live preview of the block being edited — so time edits are visible
+        var ptc = previewT % pcyc.C;
+        applyOrb(colorAt(pcyc, ptc), scaleAt(pcyc, ptc));
+        var pph = phaseAt(pcyc, ptc);
+        setReadout(pph ? phaseName(pph.type) : T().preview,
+                   pph ? String(Math.max(1, Math.ceil(pph.end - ptc - 1e-6))) : '');
+        setSub(prog.blocks > 1 ? (T().preview + ' · ' + T().blockTitle(pbi + 1)) : T().preview);
+        hint.style.opacity = '0';
+      }else{
+        var c0 = prog.segs[0] && prog.segs[0].cyc;
+        applyOrb((c0 && c0.phases[0]) ? c0.phases[0].rgb : REST_RGB, 0.5);
+        setReadout(T().ready,'');
+        setSub(programSummary());
+      }
+      applyRing(0);
+      elapsedEl.textContent = '0:00';
+      return;
+    }
+
+    if(finished){
+      applyRing(1);
+      setReadout(T().complete,'');
+      setSub(T().doneSuffix(human(prog.total)));
+      elapsedEl.textContent = fmt(prog.total);
+      return;
+    }
+
+    var t = clamp(elapsed, 0, prog.total);
+    var sa = segAt(t), seg = sa.seg, lt = t - seg.start;
+
+    if(playing && sa.idx !== lastSegIdx){
+      lastSegIdx = sa.idx;
+      if(seg.kind === 'rest'){
+        if(S.sound) playGong('holdEmpty');
+        lastPhaseIdx = -1;
+      }else{
+        if(S.sound) playGong('inhale');
+        var pc = seg.cyc.C > 0 ? (lt % seg.cyc.C) : 0;
+        lastPhaseIdx = seg.cyc.phases.indexOf(phaseAt(seg.cyc, pc));  // prime, so we don't double-gong
+      }
+    }
+
+    var np = S.preset && presetByKey(S.preset);
+    var pfx = np ? presetText(np.key).name + ' · ' : '';
+
+    if(seg.kind === 'rest'){
+      var rs = RM ? 0.16 : (0.16 + 0.12 * Math.sin(lt / 6 * 2 * Math.PI));
+      applyOrb(REST_RGB, rs);
+      setReadout(T().rest, fmt(Math.max(0, seg.dur - lt)));
+      setSub(pfx + T().restNext(seg.nextBi + 1));
+    }else{
+      var C = seg.cyc.C;
+      var tc = C > 0 ? (lt % C) : 0;
+      applyOrb(colorAt(seg.cyc, tc), scaleAt(seg.cyc, tc));
+      var ph = phaseAt(seg.cyc, tc);
+      if(ph){
+        setReadout(phaseName(ph.type), String(Math.max(1, Math.ceil(ph.end - tc - 1e-6))));
+        if(playing){
+          var idx = seg.cyc.phases.indexOf(ph);
+          if(idx !== lastPhaseIdx){
+            if(S.sound) playGong(ph.type);
+            lastPhaseIdx = idx;
+          }
+        }
+      }
+      setSub(prog.blocks > 1
+        ? (pfx + T().blockOf(seg.bi + 1, prog.blocks))
+        : (np ? presetText(np.key).name : ''));
+    }
+
+    applyRing(prog.total > 0 ? t / prog.total : 0);
+    elapsedEl.textContent = fmt(t);
+  }
+
+  function loop(now){
+    var dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if(playing && prepping){
+      prepElapsed += dt;
+      if(prepElapsed >= PREP_TOTAL){
+        prepping = false; started = true;
+        elapsed = 0; lastPhaseIdx = -1; lastSegIdx = -1;
+      }
+    }else if(playing){
+      elapsed += dt;
+      if(elapsed >= prog.total){ elapsed = prog.total; finish(); }
+    }else if(!started && !prepping && panelOpen){
+      previewT += dt;
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------- transport --------------------------------------------------- */
+  var ICON = {
+    play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6a1 1 0 0 0 1.53.85l10.7-6.8a1 1 0 0 0 0-1.7L9.53 4.35A1 1 0 0 0 8 5.2z"/></svg>',
+    pause:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.6" height="14" rx="1.2"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.2"/></svg>',
+    restart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/></svg>'
+  };
+  function setIcon(name){ playBtn.innerHTML = ICON[name]; }
+
+  var wakeLock = null;
+  function reqWake(){
+    if(!S.awake || !('wakeLock' in navigator)) return;
+    navigator.wakeLock.request('screen').then(function(w){ wakeLock = w; }).catch(function(){});
+  }
+  function relWake(){ if(wakeLock){ try{ wakeLock.release(); }catch(e){} wakeLock = null; } }
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible' && playing) reqWake();
+  });
+
+  function updateDockState(){ dock.classList.toggle('disabled', !prog.valid || prog.total <= 0); }
+
+  var toast=$('#toast'), toastT;
+  function flash(msg){
+    toast.textContent = msg; toast.classList.add('show');
+    clearTimeout(toastT);
+    toastT = setTimeout(function(){ toast.classList.remove('show'); }, 2600);
+  }
+
+  var idleT;
+  function poke(){
+    document.body.classList.remove('immersive');
+    clearTimeout(idleT);
+    if(playing) idleT = setTimeout(function(){ document.body.classList.add('immersive'); }, 3800);
+  }
+  ['pointermove','pointerdown','keydown','touchstart','wheel'].forEach(function(ev){
+    window.addEventListener(ev, poke, {passive:true});
+  });
+
+  function start(){
+    if(!prog.valid){
+      flash(T().needsPhase(prog.badBlock + 1));
+      openPanel(); return;
+    }
+    if(prog.total <= 0){ flash(T().addTimeFirst); openPanel(); return; }
+    if(finished || (!started && !prepping)){
+      // a fresh start (not a resume from pause): take one clearing breath first
+      prepping = true; prepElapsed = 0;
+      started = false; finished = false;
+      elapsed = 0; lastPhaseIdx = -1; lastSegIdx = -1;
+      if(S.sound){ ensureAudio(); resumeAudio(); playGong('holdFull'); }
+    }
+    playing = true;
+    last = performance.now();
+    playBtn.classList.add('playing');
+    playBtn.setAttribute('aria-label', T().pauseSessionAria);
+    setIcon('pause');
+    if(S.sound){ ensureAudio(); resumeAudio(); }
+    reqWake();
+    poke();
+    draw();   // paint the first frame now, don't wait on rAF
+  }
+  function pause(){
+    playing = false;
+    playBtn.classList.remove('playing');
+    playBtn.setAttribute('aria-label', T().resumeSessionAria);
+    setIcon('play');
+    relWake();
+    clearTimeout(idleT);
+    document.body.classList.remove('immersive');
+  }
+  function finish(){
+    playing = false; finished = true;
+    playBtn.classList.remove('playing');
+    playBtn.setAttribute('aria-label', T().startAgainAria);
+    setIcon('restart');
+    if(S.sound){
+      var a = ensureAudio();
+      if(a){ playGong('exhale', a.ctx.currentTime + 0.03); playGong('holdEmpty', a.ctx.currentTime + 0.9); }
+    }
+    relWake();
+    clearTimeout(idleT);
+    document.body.classList.remove('immersive');
+  }
+  function resetSession(){
+    playing = false; started = false; finished = false; elapsed = 0;
+    prepping = false; prepElapsed = 0;
+    lastPhaseIdx = -1; lastSegIdx = -1;
+    playBtn.classList.remove('playing');
+    playBtn.setAttribute('aria-label', T().startSessionAria);
+    setIcon('play');
+    relWake();
+    clearTimeout(idleT);
+    document.body.classList.remove('immersive');
+    draw();
+  }
+
+  playBtn.addEventListener('click', function(){ playing ? pause() : start(); });
+  $('#reset').addEventListener('click', resetSession);
+  $('#reset').setAttribute('aria-label', T().resetSessionAria);
+
+  /* ---------- panel ---------------------------------------------------- */
+  var panel=$('#panel'), adjust=$('#adjust');
+  function openPanel(){
+    panel.classList.add('open'); adjust.setAttribute('aria-expanded','true');
+    panelOpen = true; previewT = 0;
+    if(!playing && !started) draw();
+  }
+  function closePanel(){
+    panel.classList.remove('open'); adjust.setAttribute('aria-expanded','false');
+    panelOpen = false;
+    if(!playing && !started) draw();
+  }
+  adjust.addEventListener('click', function(){
+    panel.classList.contains('open') ? closePanel() : openPanel();
+  });
+  $('#closePanel').addEventListener('click', closePanel);
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && panel.classList.contains('open')) closePanel();
+    if(e.key === ' ' && e.target === document.body){ e.preventDefault(); playing ? pause() : start(); }
+  });
+
+  /* ---------- program / block editor -------------------------------------- */
+  var blocksEl = $('#blocks'), addBlockBtn = $('#addBlock');
+  var openBlock = 0;          // which block card is expanded (accordion)
+  var cardEls = [];
+
+  function commit(){ rebuild(); save(); if(!playing) draw(); }
+
+  /* once a named preset is edited it becomes the user's own "Custom" program */
+  function markCustom(){ if(S.preset && presetByKey(S.preset)) S.preset = 'custom'; }
+
+  function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className = cls; return e; }
+
+  function fmtNum(n){ return String(Math.round(n * 10) / 10); }
+
+  function blockSummary(b, bi){
+    var pat = b.phases.map(function(p){ return p.sec; }).join('·');
+    var s = pat + ' · ' + fmtNum(b.minutes) + ' ' + T().minUnit;
+    if(bi < S.blocks.length - 1 && b.brk > 0) s += ' · ' + T().restFieldLabel + ' ' + fmtNum(b.brk) + ' ' + T().minUnit;
+    return s;
+  }
+  function refreshSummary(bi){
+    var c = cardEls[bi];
+    if(c && c._sum) c._sum.textContent = blockSummary(S.blocks[bi], bi);
+  }
+
+  /* a number input that reports every keystroke without stealing focus */
+  function numInput(val, min, max, step, aria, cb){
+    var num = document.createElement('input');
+    num.type = 'number'; num.min = min; num.max = max; num.step = step;
+    num.value = val; num.inputMode = (step % 1 ? 'decimal' : 'numeric');
+    if(aria) num.setAttribute('aria-label', aria);
+    num.addEventListener('input', function(){
+      if(num.value === '') return;
+      var v = parseFloat(num.value); if(isNaN(v)) return;
+      cb(clamp(v, min, max));
+    });
+    num.addEventListener('change', function(){
+      var v = clamp(parseFloat(num.value) || min, min, max);
+      num.value = fmtNum(v); cb(v);
+    });
+    return num;
+  }
+
+  function phaseCell(b, bi, pi){
+    var p = b.phases[pi];
+    var cell = el('div', 'pcell');
+    var nm = T().phaseNames[pi];
+
+    var lab = document.createElement('span'); lab.textContent = nm;
+
+    var sw = document.createElement('input');
+    sw.type = 'color'; sw.className = 'swatch'; sw.value = p.color; sw.style.color = p.color;
+    sw.setAttribute('aria-label', T().colourAria(nm, bi + 1));
+    sw.addEventListener('input', function(){
+      p.color = sw.value; sw.style.color = sw.value; markCustom(); commit();
+    });
+
+    var num = numInput(p.sec, 0, 60, 1, T().secondsAria(nm, bi + 1), function(v){
+      p.sec = v; markCustom(); commit(); refreshSummary(bi);
+    });
+
+    cell.appendChild(lab); cell.appendChild(sw); cell.appendChild(num);
+    return cell;
+  }
+
+  function inlineField(label, val, min, max, step, cb){
+    var lab = document.createElement('label');
+    lab.appendChild(document.createTextNode(label));
+    var num = numInput(val, min, max, step, label, cb);
+    var u = document.createElement('i'); u.textContent = T().minUnit;
+    lab.appendChild(num); lab.appendChild(u);
+    return lab;
+  }
+
+  function iconBtn(glyph, label, fn){
+    var b = el('button', 'mini-ic'); b.type = 'button';
+    b.textContent = glyph; b.setAttribute('aria-label', label); b.title = label;
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  function blockCard(b, bi){
+    var card = el('div', 'block');
+    if(bi === openBlock) card.classList.add('open');
+
+    var head = el('div', 'block-head');
+    var toggle = el('button', 'block-toggle'); toggle.type = 'button';
+    toggle.setAttribute('aria-expanded', String(bi === openBlock));
+    var chev = el('span', 'chev'); chev.textContent = '▸';
+    var title = el('span', 'block-title'); title.textContent = T().blockTitle(bi + 1);
+    var sum = el('span', 'block-sum'); sum.textContent = blockSummary(b, bi);
+    toggle.appendChild(chev); toggle.appendChild(title); toggle.appendChild(sum);
+    toggle.addEventListener('click', function(){
+      openBlock = (openBlock === bi) ? -1 : bi;
+      renderBlocks();
+    });
+
+    var tools = el('div', 'block-tools');
+    var up = iconBtn('↑', T().moveUpAria, function(){ moveBlock(bi, -1); });
+    var dn = iconBtn('↓', T().moveDownAria, function(){ moveBlock(bi, 1); });
+    var rm = iconBtn('✕', T().removeBlockAria, function(){ removeBlock(bi); });
+    up.disabled = bi === 0;
+    dn.disabled = bi === S.blocks.length - 1;
+    rm.disabled = S.blocks.length <= 1;
+    tools.appendChild(up); tools.appendChild(dn); tools.appendChild(rm);
+
+    head.appendChild(toggle); head.appendChild(tools);
+
+    var body = el('div', 'block-body');
+    var grid = el('div', 'pgrid');
+    for(var pi = 0; pi < 4; pi++) grid.appendChild(phaseCell(b, bi, pi));
+    body.appendChild(grid);
+
+    var drow = el('div', 'drow');
+    drow.appendChild(inlineField(T().durationLabel, b.minutes, 0.5, 180, 0.5, function(v){
+      b.minutes = v; markCustom(); commit(); refreshSummary(bi);
+    }));
+    if(bi < S.blocks.length - 1){
+      drow.appendChild(inlineField(T().restFieldLabel, b.brk, 0, 60, 0.5, function(v){
+        b.brk = v; markCustom(); commit(); refreshSummary(bi);
+      }));
+    }
+    body.appendChild(drow);
+
+    card.appendChild(head); card.appendChild(body);
+    card._sum = sum;
+    return card;
+  }
+
+  function renderBlocks(){
+    blocksEl.innerHTML = '';
+    cardEls = S.blocks.map(function(b, bi){
+      var c = blockCard(b, bi);
+      blocksEl.appendChild(c);
+      return c;
+    });
+    addBlockBtn.disabled = S.blocks.length >= MAX_BLOCKS;
+    previewT = 0;   // restart the preview at the top of the (newly) open block
+    commit();
+  }
+
+  function addBlock(){
+    if(S.blocks.length >= MAX_BLOCKS) return;
+    var last = S.blocks[S.blocks.length - 1];
+    if(last.brk <= 0) last.brk = 1;   // it now has a block after it, so give it a rest
+    var copy = JSON.parse(JSON.stringify(last));
+    copy.brk = 1;
+    S.blocks.push(copy);
+    openBlock = S.blocks.length - 1;
+    markCustom();
+    renderBlocks();
+  }
+  function removeBlock(bi){
+    if(S.blocks.length <= 1) return;
+    S.blocks.splice(bi, 1);
+    if(openBlock >= S.blocks.length) openBlock = S.blocks.length - 1;
+    else if(openBlock > bi) openBlock--;
+    markCustom();
+    renderBlocks();
+  }
+  function moveBlock(bi, dir){
+    var ni = bi + dir;
+    if(ni < 0 || ni >= S.blocks.length) return;
+    var tmp = S.blocks[bi]; S.blocks[bi] = S.blocks[ni]; S.blocks[ni] = tmp;
+    if(openBlock === bi) openBlock = ni;
+    else if(openBlock === ni) openBlock = bi;
+    markCustom();
+    renderBlocks();
+  }
+  addBlockBtn.addEventListener('click', addBlock);
+
+  /* ---------- other controls ---------------------------------------------- */
+  var softEl=$('#soft'), softOut=$('#softOut'),
+      breatheEl=$('#breathe'), awakeEl=$('#awake'),
+      soundEl=$('#sound'), soundOpts=$('#soundOpts'), voiceEl=$('#voice'),
+      volEl=$('#vol'), volOut=$('#volOut'), previewEl=$('#preview');
+
+  softEl.value = S.soft;
+  softOut.textContent = S.soft + '%';
+  breatheEl.checked = S.breathe;
+  awakeEl.checked = S.awake;
+  soundEl.checked = S.sound;
+  soundOpts.hidden = !S.sound;
+  voiceEl.value = S.voice;
+  volEl.value = S.vol;
+  volOut.textContent = S.vol + '%';
+
+  /* ---------- sessions (always-visible preset list) -------------------- */
+  var presetsBody = $('#presetsBody');
+
+  function collapseChips(){
+    [].forEach.call(presetsBody.children, function(c){
+      c.classList.remove('expanded');
+      var inf = c.querySelector('.pc-info');
+      if(inf) inf.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function loadPreset(key){
+    var pre = presetByKey(key);
+    if(!pre) return null;
+    S.blocks = pre.blocks.map(sanBlock);        // sanBlock returns fresh objects
+    S.preset = key;
+    if(pre.soft != null){
+      S.soft = clamp(pre.soft, 0, 100);
+      softEl.value = S.soft; softOut.textContent = S.soft + '%';
+    }
+    openBlock = 0;
+    collapseChips();
+    renderBlocks();                             // -> commit -> rebuild/save/draw
+    markActiveChip();
+    return pre;
+  }
+
+  /* load, close the panel, and begin straight away */
+  function applyPreset(key, autostart){
+    var pre = loadPreset(key);
+    if(!pre) return;
+    var txt = presetText(key);
+    if(autostart){
+      closePanel();
+      resetSession();
+      start();
+      flash(txt.name + ' · ' + human(prog.total));
+    }else{
+      flash(T().loadedMsg(txt.name));
+      try{ blocksEl.scrollIntoView({ block:'start', behavior:'smooth' }); }catch(e){}
+    }
+  }
+
+  function markActiveChip(){
+    if(!presetsBody) return;
+    [].forEach.call(presetsBody.children, function(chip){
+      chip.classList.toggle('active', chip.dataset.key === S.preset);
+    });
+  }
+
+  function renderPresets(){
+    presetsBody.innerHTML = '';
+    PRESETS.forEach(function(pre){
+      var txt = presetText(pre.key);
+      var chip = el('div', 'preset-chip');
+      chip.dataset.key = pre.key;
+
+      var head = el('div', 'pc-head');
+
+      var info = el('button', 'pc-info'); info.type = 'button';
+      info.setAttribute('aria-expanded', 'false');
+      var sw = el('span', 'pc-swatch');
+      sw.style.background = 'linear-gradient(180deg,' +
+        pre.blocks[0].phases.map(function(ph){ return ph.color; }).join(',') + ')';
+      var main = el('span', 'pc-main');
+      var line1 = el('span', 'pc-line1');
+      var nm = el('span', 'pc-name'); nm.textContent = txt.name;
+      var meta = el('span', 'pc-meta');
+      meta.textContent = T().minutesShort(fmtNum(presetTotal(pre.blocks))) + ' · ' + T().partsWord(pre.blocks.length);
+      line1.appendChild(nm); line1.appendChild(meta);
+      var desc = el('span', 'pc-desc'); desc.textContent = txt.desc;
+      main.appendChild(line1); main.appendChild(desc);
+      var chev = el('span', 'chev'); chev.textContent = '▸';
+      info.appendChild(sw); info.appendChild(main); info.appendChild(chev);
+      info.addEventListener('click', function(){
+        var willOpen = !chip.classList.contains('expanded');
+        collapseChips();
+        chip.classList.toggle('expanded', willOpen);
+        info.setAttribute('aria-expanded', String(willOpen));
+      });
+
+      var startBtn = el('button', 'pc-start'); startBtn.type = 'button';
+      startBtn.textContent = T().startBtn;
+      startBtn.setAttribute('aria-label', T().startPresetAria(txt.name));
+      startBtn.addEventListener('click', function(){ applyPreset(pre.key, true); });
+
+      head.appendChild(info); head.appendChild(startBtn);
+
+      var body = el('div', 'pc-body');
+      var about = el('p', 'pc-about'); about.textContent = txt.about;
+      var struct = el('div', 'pc-struct');
+      pre.blocks.forEach(function(b, i){
+        var step = el('div', 'pc-step');
+        var lbl = document.createElement('b');
+        lbl.textContent = b.phases.map(function(ph){ return ph.sec; }).join('-') + ' · ' + fmtNum(b.minutes) + T().minUnit;
+        var stxt = document.createElement('span');
+        stxt.textContent = (txt.notes && txt.notes[i]) || '';
+        step.appendChild(lbl); step.appendChild(stxt);
+        struct.appendChild(step);
+      });
+      var use = el('button', 'pc-use'); use.type = 'button';
+      use.textContent = T().customizeThisOneBtn;
+      use.addEventListener('click', function(){ applyPreset(pre.key, false); });
+      body.appendChild(about); body.appendChild(struct); body.appendChild(use);
+
+      chip.appendChild(head); chip.appendChild(body);
+      presetsBody.appendChild(chip);
+    });
+    markActiveChip();
+  }
+  renderPresets();
+
+  /* ---------- discreet main-screen quick start ------------------------- */
+  var quickstartEl = $('#quickstart');
+  function renderQuickstart(){
+    quickstartEl.innerHTML = '';
+    PRESETS.forEach(function(pre){
+      var txt = presetText(pre.key);
+      var b = el('button', 'qs-btn'); b.type = 'button';
+      b.textContent = txt.name;
+      b.setAttribute('aria-label', T().startPresetAria(txt.name));
+      b.title = txt.desc;
+      b.addEventListener('click', function(){ applyPreset(pre.key, true); });
+      quickstartEl.appendChild(b);
+    });
+  }
+  renderQuickstart();
+
+  softEl.addEventListener('input', function(){
+    S.soft = clamp(parseFloat(softEl.value) || 0, 0, 100);
+    softOut.textContent = S.soft + '%';
+    rebuild(); save(); if(!playing) draw();
+  });
+  breatheEl.addEventListener('change', function(){
+    S.breathe = breatheEl.checked; save(); if(!playing) draw();
+  });
+  awakeEl.addEventListener('change', function(){
+    S.awake = awakeEl.checked; save();
+    if(S.awake && playing) reqWake(); else if(!S.awake) relWake();
+  });
+  soundEl.addEventListener('change', function(){
+    S.sound = soundEl.checked;
+    soundOpts.hidden = !S.sound;
+    save();
+    if(S.sound){ ensureAudio(); resumeAudio(); playGong('inhale'); }
+  });
+  voiceEl.addEventListener('change', function(){
+    S.voice = VOICES[voiceEl.value] ? voiceEl.value : 'temple';
+    save();
+    resumeAudio();
+    playGong('inhale');
+  });
+  volEl.addEventListener('input', function(){
+    S.vol = clamp(parseFloat(volEl.value) || 0, 0, 100);
+    volOut.textContent = S.vol + '%';
+    setVol(); save();
+  });
+  volEl.addEventListener('change', function(){ resumeAudio(); playGong('holdFull'); });
+  previewEl.addEventListener('click', previewVoice);
+
+  /* ---------- language: small circular flags, top-right of the main screen
+     Hand-drawn as inline SVG (clipped to a circle) rather than the emoji
+     glyphs, which render as small rectangles/squares on most platforms and
+     can't be reshaped with CSS. ------------------------------------------ */
+  function flagSVG(code){
+    var id = 'flagclip-' + code, body;
+    switch(code){
+      case 'en':
+        body = '<rect width="24" height="24" fill="#00247d"/>' +
+          '<path d="M0,0 L24,24" stroke="#fff" stroke-width="5"/>' +
+          '<path d="M24,0 L0,24" stroke="#fff" stroke-width="5"/>' +
+          '<path d="M0,0 L24,24" stroke="#cf142b" stroke-width="2"/>' +
+          '<path d="M24,0 L0,24" stroke="#cf142b" stroke-width="2"/>' +
+          '<rect x="9" width="6" height="24" fill="#fff"/>' +
+          '<rect y="9" width="24" height="6" fill="#fff"/>' +
+          '<rect x="10.5" width="3" height="24" fill="#cf142b"/>' +
+          '<rect y="10.5" width="24" height="3" fill="#cf142b"/>';
+        break;
+      case 'de':
+        body = '<rect width="24" height="8" fill="#000"/>' +
+          '<rect y="8" width="24" height="8" fill="#dd0000"/>' +
+          '<rect y="16" width="24" height="8" fill="#ffce00"/>';
+        break;
+      case 'fr':
+        body = '<rect width="8" height="24" fill="#0055a4"/>' +
+          '<rect x="8" width="8" height="24" fill="#fff"/>' +
+          '<rect x="16" width="8" height="24" fill="#ef4135"/>';
+        break;
+      case 'es':
+        body = '<rect width="24" height="24" fill="#aa151b"/>' +
+          '<rect y="6" width="24" height="12" fill="#f1bf00"/>';
+        break;
+      case 'pt':
+        body = '<rect width="24" height="24" fill="#ff0000"/>' +
+          '<rect width="9.6" height="24" fill="#046a38"/>' +
+          '<circle cx="9.6" cy="12" r="3.4" fill="#ffcc00" stroke="#ff0000" stroke-width="0.6"/>';
+        break;
+      case 'zh':
+        body = '<rect width="24" height="24" fill="#de2910"/>' +
+          '<polygon points="7,3.8 7.76,5.95 10.04,6.01 8.24,7.4 8.88,9.59 7,8.3 5.12,9.59 5.76,7.4 3.96,6.01 6.24,5.95" fill="#ffde00"/>' +
+          '<circle cx="13" cy="3" r="0.75" fill="#ffde00"/>' +
+          '<circle cx="15.2" cy="5.5" r="0.75" fill="#ffde00"/>' +
+          '<circle cx="15.2" cy="9" r="0.75" fill="#ffde00"/>' +
+          '<circle cx="13" cy="11.4" r="0.75" fill="#ffde00"/>';
+        break;
+      case 'hi':
+        body = '<rect width="24" height="8" fill="#ff9933"/>' +
+          '<rect y="8" width="24" height="8" fill="#fff"/>' +
+          '<rect y="16" width="24" height="8" fill="#138808"/>' +
+          '<circle cx="12" cy="12" r="3" fill="none" stroke="#000080" stroke-width="0.5"/>' +
+          '<line x1="12" y1="12" x2="15" y2="12" stroke="#000080" stroke-width="0.4"/>' +
+          '<line x1="12" y1="12" x2="14.12" y2="14.12" stroke="#000080" stroke-width="0.4"/>' +
+          '<line x1="12" y1="12" x2="12" y2="15" stroke="#000080" stroke-width="0.4"/>' +
+          '<line x1="12" y1="12" x2="9.88" y2="14.12" stroke="#000080" stroke-width="0.4"/>' +
+          '<line x1="12" y1="12" x2="9" y2="12" stroke="#000080" stroke-width="0.4"/>' +
+          '<line x1="12" y1="12" x2="9.88" y2="9.88" stroke="#000080" stroke-width="0.4"/>' +
+          '<line x1="12" y1="12" x2="12" y2="9" stroke="#000080" stroke-width="0.4"/>' +
+          '<line x1="12" y1="12" x2="14.12" y2="9.88" stroke="#000080" stroke-width="0.4"/>' +
+          '<circle cx="12" cy="12" r="0.5" fill="#000080"/>';
+        break;
+      case 'ar':
+        // simplified: Saudi green field. The real flag's Shahada calligraphy and
+        // sword can't be drawn faithfully at icon size, so this only gestures at
+        // a script line and a blade rather than claiming to reproduce it.
+        body = '<rect width="24" height="24" fill="#006c35"/>' +
+          '<rect x="5" y="7" width="14" height="1.6" rx="0.8" fill="#fff" opacity="0.92"/>' +
+          '<rect x="5" y="10" width="10" height="1.6" rx="0.8" fill="#fff" opacity="0.92"/>' +
+          '<rect x="4" y="16" width="13" height="2" rx="1" fill="#fff"/>' +
+          '<polygon points="17,15 21,17 17,19" fill="#fff"/>';
+        break;
+      default:
+        body = '<rect width="24" height="24" fill="#333"/>';
+    }
+    return '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">' +
+      '<defs><clipPath id="' + id + '"><circle cx="12" cy="12" r="12"/></clipPath></defs>' +
+      '<g clip-path="url(#' + id + ')">' + body + '</g></svg>';
+  }
+  var langflagsEl = $('#langflags'),
+      howtoTitleEl = $('#howtoTitle'), howtoP1El = $('#howtoP1'), howtoP2El = $('#howtoP2'),
+      sessionsLabelEl = $('#sessionsLabel'), customizeLabelEl = $('#customizeLabel'),
+      softLabelEl = $('#softLabel'), breatheLabelEl = $('#breatheLabel'),
+      awakeLabelEl = $('#awakeLabel'), soundLabelEl = $('#soundLabel'),
+      voiceLabelEl = $('#voiceLabel'), volumeLabelEl = $('#volumeLabel'),
+      panelTitleEl = $('#panelTitle');
+
+  LANGS.forEach(function(code){
+    var b = el('button', 'flag-btn'); b.type = 'button';
+    b.innerHTML = flagSVG(code);
+    b.dataset.lang = code;
+    b.setAttribute('aria-label', LANG_NATIVE[code]);
+    b.addEventListener('click', function(){
+      if(S.lang === code) return;
+      S.lang = code; save(); applyLanguage();
+    });
+    langflagsEl.appendChild(b);
+  });
+  function markActiveFlag(){
+    [].forEach.call(langflagsEl.children, function(b){
+      var on = b.dataset.lang === S.lang;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  function currentPlayAria(){
+    if(playing) return T().pauseSessionAria;
+    if(finished) return T().startAgainAria;
+    if(started || prepping) return T().resumeSessionAria;
+    return T().startSessionAria;
+  }
+
+  function applyLanguage(){
+    document.documentElement.lang = S.lang;
+    document.documentElement.dir = LANG_RTL[S.lang] ? 'rtl' : 'ltr';
+    markActiveFlag();
+    langflagsEl.setAttribute('aria-label', T().languageLabel);
+
+    panelTitleEl.textContent = T().programTitle;
+    $('#closePanel').textContent = T().doneBtn;
+    adjust.textContent = T().adjustBtn;
+    hint.textContent = T().orPressPlay;
+    howtoTitleEl.textContent = T().howToBreatheTitle;
+    howtoP1El.textContent = T().howToBreatheP1;
+    howtoP2El.textContent = T().howToBreatheP2;
+    sessionsLabelEl.textContent = T().sessionsLabel;
+    customizeLabelEl.textContent = T().customizeLabel;
+    addBlockBtn.textContent = T().addBlockBtn;
+    softLabelEl.textContent = T().softnessLabel;
+    breatheLabelEl.textContent = T().breatheToggleLabel;
+    awakeLabelEl.textContent = T().awakeToggleLabel;
+    soundLabelEl.textContent = T().soundToggleLabel;
+    voiceLabelEl.textContent = T().gongVoiceLabel;
+    previewEl.textContent = T().hearBtn;
+    volumeLabelEl.textContent = T().volumeLabel;
+    [].forEach.call(voiceEl.options, function(opt){ opt.textContent = T().voices[opt.value] || opt.value; });
+
+    playBtn.setAttribute('aria-label', currentPlayAria());
+    $('#reset').setAttribute('aria-label', T().resetSessionAria);
+
+    renderPresets();
+    renderQuickstart();
+    renderBlocks();   // rebuilds phase/duration labels -> commit -> rebuild -> updateProgSum/draw
+  }
+
+  /* ---------- go ------------------------------------------------------- */
+  applyLanguage();  // sets every static label and builds blocks/presets/quickstart -> commit() -> rebuild()
+  setIcon('play');
+  draw();
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
