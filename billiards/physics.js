@@ -255,6 +255,7 @@ function collideBalls(A, B, P, dt) {
   let dist = Math.hypot(dx, dy);
   if (dist < 1e-9) { dx = 1; dy = 0; dist = 1; }
   const nx = dx / dist, ny = dy / dist;
+  collideBalls.lastN = [nx, ny];                        // exact contact normal, for readouts
   const vn = (A.vx - B.vx) * nx + (A.vy - B.vy) * ny;   // >0 means approaching
   if (vn <= 0) {
     // separating or resting: only resolve overlap
@@ -470,7 +471,7 @@ World.prototype.step = function (dt) {
       const dx = B.x - A.x, dy = B.y - A.y;
       if (dx * dx + dy * dy >= D2) continue;
       const sp = collideBalls(A, B, P, dt);
-      if (sp > 0) ev.push({ type: 'ball', a: A.id, b: B.id, speed: sp, t: this.time });
+      if (sp > 0) ev.push({ type: 'ball', a: A.id, b: B.id, speed: sp, t: this.time, nx: collideBalls.lastN[0], ny: collideBalls.lastN[1] });
     }
   }
   for (let i = 0; i < n; i++) {

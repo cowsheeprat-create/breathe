@@ -1,6 +1,9 @@
 # Cue — physics billiards
 
-Open `billiards/index.html` in a browser. No build, no dependencies.
+Two pages, one physics engine. No build step.
+
+- `closeup.html` — **3-D close-up**: one rail, one pocket and two balls, with the cue ball’s contact on the object ball shown in detail. Eight-plus scenarios (straight-in stun, cut, thin cut, follow, draw, cut with english/throw, rail-hugging pot, bank shot, cushion lab), slow motion down to 0.01×, ghost ball, trails, spin axes and exact readouts at the moment of contact (cut angle, throw, speeds, turn angle, cushion in/out angle vs the perfect mirror). Uses a vendored copy of three.js (`vendor/`, MIT).
+- `index.html` — the full-table top-down game (8-ball, 9-ball, snooker, carom) with radiating bounce lines.
 
 Games: 8-ball, 9-ball, snooker (22 balls), 3-cushion carom, practice.
 
@@ -20,6 +23,6 @@ Press **R** (or the button). Rays leave the cue ball (or any ball you click) in 
 - **Physical**: each ray runs the real simulation with your current power and tip position, so spin and speed bend the bounces.
 
 ## Tests
-`node billiards/test/physics.test.js` checks closed-form results (rolling distance, 5/7 rule, 90° rule, energy never increases, mirror law, pockets, racks).
+`node billiards/test/physics.test.js` and `node billiards/test/scenarios.test.js` check closed-form results (rolling distance, 5/7 rule, 90° rule, energy never increases, mirror law, pockets, racks).
 
 Rules are intentionally light (turns, scratches, scoring); group assignment and snooker colour order are not enforced.
